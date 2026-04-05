@@ -86,6 +86,11 @@ struct CameraView: View {
         .background(Color.black)
         .ignoresSafeArea()
         .task {
+            // Load current photo count for this event
+            let photoService = PhotoService()
+            if let count = try? await photoService.getPhotoCount(eventId: eventId) {
+                photoCount = count
+            }
             if !isSimulator {
                 try? await cameraService.configure()
             }

@@ -63,18 +63,23 @@ struct LiveEventCard: View {
                         Button {
                             onCamera()
                         } label: {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(Color(hex: "1a1c1c"))
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    LinearGradient(
-                                        colors: [.white, Color(hex: "d4d4d4")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                            HStack(spacing: 6) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 13))
+                                Text("Expose")
+                                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                            }
+                            .foregroundStyle(Color(hex: "1a1c1c"))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(
+                                    colors: [.white, Color(hex: "d4d4d4")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                                .clipShape(Circle())
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.lg))
                         }
                     }
                 }
@@ -93,8 +98,8 @@ struct LiveEventCard: View {
             hostId: UUID(),
             name: "Saturday Night",
             description: nil,
-            coverImageUrl: nil,
             location: nil,
+            coverImageUrl: nil,
             startTime: Date(),
             endTime: Date().addingTimeInterval(3600),
             status: .live,

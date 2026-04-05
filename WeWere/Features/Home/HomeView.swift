@@ -109,7 +109,7 @@ struct HomeView: View {
                         LiveEventCard(
                             event: event,
                             photoCount: viewModel.photoCounts[event.id] ?? 0,
-                            memberCount: 0,
+                            memberCount: viewModel.memberCounts[event.id] ?? 1,
                             onCamera: {
                                 appState.presentedSheet = .camera(event.id)
                             }
@@ -130,37 +130,19 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
             sectionHeader(title: "PAST EVENTS", count: nil)
 
-            // Ready to Develop
-            if !viewModel.readyToDevelop.isEmpty {
-                VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
-                    Text("READY TO DEVELOP")
-                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
-                        .tracking(1.5)
-                        .foregroundStyle(Color(hex: "D4A853"))
-
-                    ForEach(viewModel.readyToDevelop) { event in
-                        NavigationLink(value: Route.developFilm(event.id)) {
-                            PastEventRow(event: event, isReadyToDevelop: true)
-                        }
-                        .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
+                ForEach(viewModel.readyToDevelop) { event in
+                    NavigationLink(value: Route.developFilm(event.id)) {
+                        PastEventRow(event: event, isReadyToDevelop: true)
                     }
+                    .buttonStyle(.plain)
                 }
-            }
 
-            // Developed
-            if !viewModel.developedEvents.isEmpty {
-                VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
-                    Text("DEVELOPED")
-                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
-                        .tracking(1.5)
-                        .foregroundStyle(WeWereColors.onSurfaceVariant)
-
-                    ForEach(viewModel.developedEvents) { event in
-                        NavigationLink(value: Route.album(event.id)) {
-                            PastEventRow(event: event, isReadyToDevelop: false)
-                        }
-                        .buttonStyle(.plain)
+                ForEach(viewModel.developedEvents) { event in
+                    NavigationLink(value: Route.album(event.id)) {
+                        PastEventRow(event: event, isReadyToDevelop: false)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
