@@ -1,0 +1,90 @@
+import SwiftUI
+
+struct RootView: View {
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var authService: AuthService
+    @State private var showJoinEvent = false
+
+    private var selectedTabRawValue: Binding<Int> {
+        Binding(
+            get: { appState.selectedTab.rawValue },
+            set: { appState.selectedTab = Tab(rawValue: $0) ?? .home }
+        )
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            TabView(selection: $appState.selectedTab) {
+                NavigationStack(path: $appState.navigationPath) {
+                    HomeView()
+                        .navigationDestination(for: Route.self) { route in
+                            destinationView(for: route)
+                        }
+                }
+                .tag(Tab.home)
+
+                NavigationStack {
+                    Text("Events") // Placeholder
+                }
+                .tag(Tab.events)
+
+                NavigationStack {
+                    ProfileView()
+                }
+                .tag(Tab.profile)
+            }
+            // Hide default tab bar
+            .toolbar(.hidden, for: .tabBar)
+
+            WeWereTabBar(selectedTab: selectedTabRawValue)
+        }
+        .background(Color(hex: "#131313"))
+        .sheet(item: Binding(
+            get: { appState.presentedSheet.map { SheetRoute(route: $0) } },
+            set: { appState.presentedSheet = $0?.route }
+        )) { sheet in
+            destinationView(for: sheet.route)
+        }
+        .onChange(of: appState.pendingDeepLink) { _, newValue in
+            if let link = newValue {
+                appState.pendingDeepLink = nil
+                handleDeepLink(link)
+            }
+        }
+    }
+
+    @ViewBuilder
+    func destinationView(for route: Route) -> some View {
+        switch route {
+        case .eventDetail(let id):
+            EventDetailView(eventId: id)
+        case .camera(let eventId):
+            CameraView(eventId: eventId)
+        case .developFilm(let eventId):
+            DevelopFilmView(eventId: eventId)
+        case .developingAnimation(let eventId):
+            DevelopingAnimationView(eventId: eventId)
+        case .album(let eventId):
+            AlbumView(eventId: eventId)
+        case .photoDetail(let photoId):
+            PhotoDetailView(photoId: photoId)
+        case .joinEvent(let shareCode):
+            JoinEventView(shareCode: shareCode)
+        case .createEvent:
+            CreateEventView()
+        }
+    }
+
+    func handleDeepLink(_ route: Route) {
+        if case .joinEvent = route {
+            appState.presentedSheet = route
+        } else {
+            appState.navigationPath.append(route)
+        }
+    }
+}
+
+struct SheetRoute: Identifiable {
+    let id = UUID()
+    let route: Route
+}
