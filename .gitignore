@@ -23,3 +23,11 @@ WeWere/Secrets.swift
 # Supabase local
 supabase/.branches/
 supabase/.temp/
+
+# Python backend
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+__pycache__/
+*.pyc

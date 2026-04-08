@@ -12,9 +12,11 @@ class EventDetailViewModel: ObservableObject {
     @Published var isHost = false
     @Published var showEndConfirmation = false
     @Published var isEnding = false
+    @Published var eventWasEnded = false
 
     private let eventService = EventService()
     private let photoService = PhotoService()
+    weak var authService: AuthService?
 
     init(eventId: UUID) {
         self.eventId = eventId
@@ -22,114 +24,64 @@ class EventDetailViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        defer { isLoading = false }
 
-        // Step 1: Load event
-        do {
-            event = try await eventService.fetchEvent(byId: eventId)
-        } catch {
-            print("Failed to load event: \(error)")
+        // Fetch everything concurrently
+        async let eventFetch = eventService.fetchEvent(byId: eventId)
+        async let membersFetch = eventService.fetchMembers(eventId: eventId)
+        async let countFetch = photoService.getPhotoCount(eventId: eventId)
+
+        // Collect results
+        var fetchedEvent: Event?
+        var fetchedMembers: [MemberWithUser] = []
+        var fetchedCount: Int = 0
+
+        do { fetchedEvent = try await eventFetch } catch { print("Event fetch: \(error)") }
+        do { fetchedMembers = try await membersFetch } catch { print("Members fetch: \(error)") }
+        do { fetchedCount = try await countFetch } catch { print("Count fetch: \(error)") }
+
+        // Apply all at once
+        event = fetchedEvent
+        members = fetchedMembers.map { mwu in
+            let user = mwu.user ?? AppUser(
+                id: mwu.userId,
+                authId: nil,
+                firstName: "",
+                lastName: "",
+                displayName: "Member",
+                instagramHandle: nil,
+                phoneNumber: nil,
+                avatarUrl: nil,
+                pushToken: nil,
+                createdAt: Date()
+            )
+            return (mwu.toEventMember, user)
+        }
+        photoCount = fetchedCount
+
+        if let event = fetchedEvent, let currentUser = authService?.currentUser {
+            isHost = (currentUser.id == event.hostId)
         }
 
-        // Step 2: Load members
-        do {
-            members = try await eventService.fetchMembersWithUsers(eventId: eventId)
-        } catch {
-            print("Failed to load members with users: \(error)")
-            // Fallback: try loading members without user join
-            do {
-                let plainMembers = try await eventService.fetchMembers(eventId: eventId)
-                members = plainMembers.map { member in
-                    let placeholder = AppUser(
-                        id: member.userId,
-                        authId: UUID(),
-                        firstName: "",
-                        lastName: "",
-                        displayName: "Member",
-                        instagramHandle: nil,
-                        phoneNumber: nil,
-                        avatarUrl: nil,
-                        pushToken: nil,
-                        createdAt: Date()
-                    )
-                    return (member, placeholder)
-                }
-            } catch {
-                print("Failed to load members fallback: \(error)")
-            }
-        }
-
-        // Step 3: Load photo count
-        do {
-            photoCount = try await photoService.getPhotoCount(eventId: eventId)
-        } catch {
-            print("Failed to load photo count: \(error)")
-        }
-
-        // Step 4: Check if current user is host
-        await checkIsHost()
-
-    }
-
-    private func checkIsHost() async {
-        // Method 1: Check via event.hostId matching current user
-        do {
-            let session = try await SupabaseManager.shared.client.auth.session
-            let authId = session.user.id
-
-            // Check member role
-            for (member, user) in members {
-                if user.authId == authId && member.role == .host {
-                    isHost = true
-                    return
-                }
-            }
-
-            // Check via event hostId
-            if let event {
-                let currentUser: AppUser = try await SupabaseManager.shared.client
-                    .from("users")
-                    .select()
-                    .eq("auth_id", value: authId.uuidString)
-                    .single()
-                    .execute()
-                    .value
-
-                if event.hostId == currentUser.id {
-                    isHost = true
-                    return
-                }
-            }
-        } catch {
-            print("Failed to check host status: \(error)")
-        }
-
-        // Method 2: Check via plain members (if user join failed)
-        do {
-            let session = try await SupabaseManager.shared.client.auth.session
-            let authId = session.user.id
-
-            let currentUser: AppUser = try await SupabaseManager.shared.client
-                .from("users")
-                .select()
-                .eq("auth_id", value: authId.uuidString)
-                .single()
-                .execute()
-                .value
-
-            let plainMembers = try await eventService.fetchMembers(eventId: eventId)
-            if plainMembers.contains(where: { $0.userId == currentUser.id && $0.role == .host }) {
-                isHost = true
-            }
-        } catch {
-            print("Failed to check host status (fallback): \(error)")
-        }
+        isLoading = false
     }
 
     func subscribeToUpdates() {
         eventService.subscribeToPhotoCount(eventId: eventId) { [weak self] count in
             Task { @MainActor in
                 self?.photoCount = count
+            }
+        }
+    }
+
+    func subscribeToEventEnd() {
+        eventService.subscribeToEventStatus(eventId: eventId) { [weak self] status in
+            Task { @MainActor in
+                guard let self else { return }
+                if status == .ended {
+                    self.event?.status = .ended
+                    self.eventWasEnded = true
+                    NotificationCenter.default.post(name: .eventUpdated, object: nil)
+                }
             }
         }
     }

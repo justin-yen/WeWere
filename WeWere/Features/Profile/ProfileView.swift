@@ -1,5 +1,16 @@
 import SwiftUI
 
+// MARK: - Backend response for profile stats
+struct ProfileStatsResponse: Decodable {
+    let eventsAttended: Int
+    let photosTaken: Int
+
+    enum CodingKeys: String, CodingKey {
+        case eventsAttended = "events_attended"
+        case photosTaken = "photos_taken"
+    }
+}
+
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
 
@@ -105,7 +116,7 @@ struct ProfileView: View {
                 .padding(.bottom, 24)
             } else {
                 HStack(spacing: 8) {
-                    Text(authService.currentUser?.displayName ?? "Guest")
+                    Text(authService.currentUser?.resolvedDisplayName ?? "Guest")
                         .font(.custom(WeWereFontFamily.jakartaBold, size: 20))
                         .foregroundStyle(.white)
 
@@ -235,29 +246,14 @@ struct ProfileView: View {
     }
 
     private func loadStats() async {
-        guard let user = authService.currentUser else { return }
-        let client = SupabaseManager.shared.client
-
-        struct IdOnly: Decodable { let id: UUID }
-
+        // Try to load stats from backend
         do {
-            let memberships: [IdOnly] = try await client
-                .from("event_members")
-                .select("id")
-                .eq("user_id", value: user.id.uuidString)
-                .execute()
-                .value
-            eventsAttended = memberships.count
-        } catch {}
-
-        do {
-            let photos: [IdOnly] = try await client
-                .from("photos")
-                .select("id")
-                .eq("user_id", value: user.id.uuidString)
-                .execute()
-                .value
-            photosTaken = photos.count
-        } catch {}
+            let stats: ProfileStatsResponse = try await APIClient.shared.get("/profiles/me/stats")
+            eventsAttended = stats.eventsAttended
+            photosTaken = stats.photosTaken
+        } catch {
+            // Fallback: stats unavailable
+            print("Failed to load profile stats: \(error)")
+        }
     }
 }

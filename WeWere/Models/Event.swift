@@ -6,6 +6,10 @@ struct Event: Codable, Identifiable, Hashable {
     var name: String
     var description: String?
     var location: String?
+    var locationName: String?
+    var locationAddress: String?
+    var locationLat: Double?
+    var locationLng: Double?
     var coverImageUrl: String?
     let startTime: Date
     let endTime: Date
@@ -19,6 +23,10 @@ struct Event: Codable, Identifiable, Hashable {
         case name
         case description
         case location
+        case locationName = "location_name"
+        case locationAddress = "location_address"
+        case locationLat = "location_lat"
+        case locationLng = "location_lng"
         case coverImageUrl = "cover_image_url"
         case startTime = "start_time"
         case endTime = "end_time"
@@ -41,6 +49,11 @@ struct Event: Codable, Identifiable, Hashable {
     }
 
     var shareURL: URL? {
-        URL(string: "https://wewere.app/event/\(shareCode)")
+        URL(string: "wewere://event/\(shareCode)")
+    }
+
+    /// Text to share with the link
+    var shareText: String {
+        "Join my event \"\(name)\" on WeWere! \(shareURL?.absoluteString ?? "")"
     }
 }

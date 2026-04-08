@@ -165,6 +165,9 @@ struct DevelopFilmView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(WeWereColors.surface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .tint(.white)
         .task {
             await viewModel.load()
         }

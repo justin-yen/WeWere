@@ -2,10 +2,10 @@ import Foundation
 
 struct AppUser: Codable, Identifiable, Hashable {
     let id: UUID
-    let authId: UUID
+    var authId: UUID?
     var firstName: String
     var lastName: String
-    var displayName: String
+    var displayName: String?
     var instagramHandle: String?
     var phoneNumber: String?
     var avatarUrl: String?
@@ -23,5 +23,11 @@ struct AppUser: Codable, Identifiable, Hashable {
         case avatarUrl = "avatar_url"
         case pushToken = "push_token"
         case createdAt = "created_at"
+    }
+
+    /// Display name with fallback to first + last
+    var resolvedDisplayName: String {
+        if let dn = displayName, !dn.isEmpty { return dn }
+        return "\(firstName) \(lastName)"
     }
 }

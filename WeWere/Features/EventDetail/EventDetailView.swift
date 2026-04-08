@@ -1,51 +1,75 @@
 import SwiftUI
+import MapKit
 
 struct EventDetailView: View {
     @StateObject var viewModel: EventDetailViewModel
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var authService: AuthService
 
     init(eventId: UUID) {
         _viewModel = StateObject(wrappedValue: EventDetailViewModel(eventId: eventId))
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
-                // MARK: - Hero Area
-                heroSection
-
-                // MARK: - Event Info
-                eventInfoSection
-
-                // MARK: - Open Camera (Live Only)
-                if viewModel.event?.isLive == true {
-                    cameraButton
+        Group {
+            if viewModel.isLoading {
+                ZStack {
+                    Color(hex: "#131313").ignoresSafeArea()
+                    ProgressView()
+                        .tint(WeWereColors.outline)
                 }
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
+                        // MARK: - Hero Area
+                        heroSection
 
-                // MARK: - End Event (Host Only)
-                if viewModel.isHost && viewModel.event?.isLive == true {
-                    endEventButton
+                        // MARK: - Event Info
+                        eventInfoSection
+
+                        // MARK: - Open Camera (Live Only)
+                        if viewModel.event?.isLive == true {
+                            cameraButton
+                        }
+
+                        // MARK: - End Event (Host Only)
+                        if viewModel.isHost && viewModel.event?.isLive == true {
+                            endEventButton
+                        }
+
+                        // MARK: - Share Link
+                        if let url = viewModel.event?.shareURL {
+                            shareLinkSection(url: url)
+                        }
+
+                        // MARK: - Attendees
+                        attendeesSection
+
+                        // MARK: - Location
+                        locationSection
+
+                        Spacer(minLength: WeWereSpacing.xxxl)
+                    }
                 }
-
-                // MARK: - Share Link
-                if let url = viewModel.event?.shareURL {
-                    shareLinkSection(url: url)
-                }
-
-                // MARK: - Attendees
-                attendeesSection
-
-                // MARK: - Location
-                locationSection
-
-                Spacer(minLength: WeWereSpacing.xxxl)
             }
         }
         .background(Color(hex: "#131313").ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color(hex: "#131313"), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .tint(.white)
         .task {
+            viewModel.authService = authService
             await viewModel.load()
             viewModel.subscribeToUpdates()
+            viewModel.subscribeToEventEnd()
+        }
+        .onChange(of: viewModel.eventWasEnded) { _, ended in
+            if ended && !viewModel.isHost {
+                // Attendee: pop back to home when host ends the event
+                appState.navigationPath = NavigationPath()
+            }
         }
     }
 
@@ -64,7 +88,7 @@ struct EventDetailView: View {
                 startPoint: .topTrailing,
                 endPoint: .bottomLeading
             )
-            .frame(height: 300)
+            .frame(height: 150)
 
             // Bottom fade
             LinearGradient(
@@ -72,7 +96,7 @@ struct EventDetailView: View {
                 startPoint: .center,
                 endPoint: .bottom
             )
-            .frame(height: 300)
+            .frame(height: 150)
 
             // Live badge
             if viewModel.event?.isLive == true {
@@ -80,7 +104,7 @@ struct EventDetailView: View {
                     .padding(WeWereSpacing.md)
             }
         }
-        .frame(height: 300)
+        .frame(height: 150)
     }
 
     private var liveBadge: some View {
@@ -169,26 +193,28 @@ struct EventDetailView: View {
 
     private func shareLinkSection(url: URL) -> some View {
         VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
-            Text("SHARE LINK")
+            Text("Invite friends")
                 .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
                 .tracking(2)
                 .foregroundStyle(WeWereColors.onSurfaceVariant)
 
-            ShareLink(item: url) {
-                HStack(spacing: WeWereSpacing.xs) {
-                    Image(systemName: "link")
-                        .font(.system(size: 14))
-                    Text(url.absoluteString)
-                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14))
+            if let event = viewModel.event {
+                ShareLink(item: event.shareText) {
+                    HStack(spacing: WeWereSpacing.xs) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14))
+                        Text("Share film roll")
+                            .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                        Spacer()
+                        Text(event.shareCode)
+                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                            .foregroundStyle(WeWereColors.outline)
+                    }
+                    .foregroundStyle(WeWereColors.onSurface)
+                    .padding(WeWereSpacing.sm)
+                    .background(WeWereColors.surfaceContainerHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
                 }
-                .foregroundStyle(WeWereColors.onSurface)
-                .padding(WeWereSpacing.sm)
-                .background(WeWereColors.surfaceContainerHigh)
-                .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
             }
         }
         .padding(.horizontal, WeWereSpacing.md)
@@ -228,6 +254,8 @@ struct EventDetailView: View {
 
     // MARK: - Location Section
 
+    @State private var showMapActionSheet = false
+
     private var locationSection: some View {
         VStack(alignment: .leading, spacing: WeWereSpacing.sm) {
             Text("LOCATION")
@@ -235,20 +263,88 @@ struct EventDetailView: View {
                 .tracking(2)
                 .foregroundStyle(WeWereColors.onSurfaceVariant)
 
-            // Placeholder map area
-            RoundedRectangle(cornerRadius: WeWereRadius.xl)
-                .fill(WeWereColors.surfaceContainerHigh)
+            if let event = viewModel.event,
+               let lat = event.locationLat,
+               let lng = event.locationLng {
+                // Interactive map preview
+                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                let region = MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                )
+
+                Map(initialPosition: .region(region), interactionModes: []) {
+                    Marker(event.locationName ?? event.location ?? "Event", coordinate: coordinate)
+                }
                 .frame(height: 160)
-                .overlay(
-                    VStack(spacing: WeWereSpacing.xs) {
-                        Image(systemName: "map")
-                            .font(.system(size: 24))
-                            .foregroundStyle(WeWereColors.outlineVariant)
-                        Text("Map placeholder")
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
+                .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
+                .onTapGesture {
+                    showMapActionSheet = true
+                }
+                .confirmationDialog("Open in Maps", isPresented: $showMapActionSheet) {
+                    Button("Open in Apple Maps") {
+                        let name = (event.locationName ?? event.location ?? "Event")
+                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "http://maps.apple.com/?ll=\(lat),\(lng)&q=\(name)") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    Button("Open in Google Maps") {
+                        let name = (event.locationName ?? event.location ?? "Event")
+                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        let googleMapsApp = URL(string: "comgooglemaps://?center=\(lat),\(lng)&q=\(name)")!
+                        if UIApplication.shared.canOpenURL(googleMapsApp) {
+                            UIApplication.shared.open(googleMapsApp)
+                        } else if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(lat),\(lng)") {
+                            UIApplication.shared.open(webURL)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+
+                // Location name and address below the map
+                VStack(alignment: .leading, spacing: 2) {
+                    if let name = event.locationName {
+                        Text(name)
+                            .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                            .foregroundStyle(WeWereColors.onSurface)
+                    }
+                    if let address = event.locationAddress {
+                        Text(address)
+                            .font(.custom(WeWereFontFamily.jakartaRegular, size: 12))
                             .foregroundStyle(WeWereColors.outline)
                     }
-                )
+                }
+            } else if let event = viewModel.event, let location = event.location, !location.isEmpty {
+                // Plain text location (no coordinates)
+                HStack(spacing: WeWereSpacing.xs) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(WeWereColors.outline)
+                    Text(location)
+                        .font(.custom(WeWereFontFamily.jakartaRegular, size: 14))
+                        .foregroundStyle(WeWereColors.onSurface)
+                }
+                .padding(WeWereSpacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(WeWereColors.surfaceContainerHigh)
+                .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
+            } else {
+                // No location set
+                RoundedRectangle(cornerRadius: WeWereRadius.xl)
+                    .fill(WeWereColors.surfaceContainerHigh)
+                    .frame(height: 160)
+                    .overlay(
+                        VStack(spacing: WeWereSpacing.xs) {
+                            Image(systemName: "map")
+                                .font(.system(size: 24))
+                                .foregroundStyle(WeWereColors.outlineVariant)
+                            Text("No location set")
+                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
+                                .foregroundStyle(WeWereColors.outline)
+                        }
+                    )
+            }
         }
         .padding(.horizontal, WeWereSpacing.md)
     }

@@ -69,17 +69,15 @@ struct CreateEventView: View {
                             .foregroundStyle(WeWereColors.outline)
                             .tracking(2)
 
-                        TextField("", text: $viewModel.location, prompt:
-                            Text("Event location")
-                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 14))
-                                .foregroundStyle(WeWereColors.outlineVariant)
+                        LocationSearchView(
+                            locationText: $viewModel.location,
+                            onLocationSelected: { name, address, lat, lng in
+                                viewModel.setLocation(name: name, address: address, lat: lat, lng: lng)
+                            },
+                            onCleared: {
+                                viewModel.clearLocation()
+                            }
                         )
-                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 14))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .frame(height: 48)
-                        .background(Color(hex: "191919"))
-                        .cornerRadius(8)
                     }
 
                     // Start time
@@ -134,9 +132,13 @@ struct CreateEventView: View {
                     Button {
                         Task {
                             do {
-                                let _ = try await viewModel.createEvent()
+                                let event = try await viewModel.createEvent()
                                 NotificationCenter.default.post(name: .eventCreated, object: nil)
                                 dismiss()
+                                // Navigate to the new event detail after sheet dismisses
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    appState.navigationPath.append(Route.eventDetail(event.id))
+                                }
                             } catch {
                                 print("Failed to create event: \(error)")
                             }

@@ -2,8 +2,150 @@ import Foundation
 import Supabase
 import Realtime
 
+// MARK: - Backend Request/Response Types
+
+struct CreateEventRequest: Encodable {
+    let name: String
+    let description: String?
+    let location: String?
+    let locationName: String?
+    let locationAddress: String?
+    let locationLat: Double?
+    let locationLng: Double?
+    let startTime: Date
+    let endTime: Date
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case location
+        case locationName = "location_name"
+        case locationAddress = "location_address"
+        case locationLat = "location_lat"
+        case locationLng = "location_lng"
+        case startTime = "start_time"
+        case endTime = "end_time"
+    }
+}
+
+/// The backend returns events with extra fields like photo_count and member_count
+struct EventWithCounts: Decodable, Identifiable {
+    let id: UUID
+    let hostId: UUID
+    var name: String
+    var description: String?
+    var location: String?
+    var locationName: String?
+    var locationAddress: String?
+    var locationLat: Double?
+    var locationLng: Double?
+    var coverImageUrl: String?
+    let startTime: Date
+    let endTime: Date
+    var status: Event.EventStatus
+    let shareCode: String
+    let createdAt: Date
+    var photoCount: Int?
+    var memberCount: Int?
+    var membership: MembershipInfo?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case hostId = "host_id"
+        case name
+        case description
+        case location
+        case locationName = "location_name"
+        case locationAddress = "location_address"
+        case locationLat = "location_lat"
+        case locationLng = "location_lng"
+        case coverImageUrl = "cover_image_url"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case status
+        case shareCode = "share_code"
+        case createdAt = "created_at"
+        case photoCount = "photo_count"
+        case memberCount = "member_count"
+        case membership
+    }
+
+    var toEvent: Event {
+        Event(
+            id: id,
+            hostId: hostId,
+            name: name,
+            description: description,
+            location: location,
+            locationName: locationName,
+            locationAddress: locationAddress,
+            locationLat: locationLat,
+            locationLng: locationLng,
+            coverImageUrl: coverImageUrl,
+            startTime: startTime,
+            endTime: endTime,
+            status: status,
+            shareCode: shareCode,
+            createdAt: createdAt
+        )
+    }
+}
+
+struct MembershipInfo: Decodable {
+    let hasDeveloped: Bool
+    let developedAt: Date?
+    let role: String?
+
+    enum CodingKeys: String, CodingKey {
+        case hasDeveloped = "has_developed"
+        case developedAt = "developed_at"
+        case role
+    }
+}
+
+struct MemberWithUser: Decodable, Identifiable {
+    let id: UUID
+    let eventId: UUID
+    let userId: UUID
+    let role: EventMember.MemberRole
+    let hasDeveloped: Bool
+    let developedAt: Date?
+    let joinedAt: Date
+    let user: AppUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case eventId = "event_id"
+        case userId = "user_id"
+        case role
+        case hasDeveloped = "has_developed"
+        case developedAt = "developed_at"
+        case joinedAt = "joined_at"
+        case user
+    }
+
+    var toEventMember: EventMember {
+        EventMember(
+            id: id,
+            eventId: eventId,
+            userId: userId,
+            role: role,
+            hasDeveloped: hasDeveloped,
+            developedAt: developedAt,
+            joinedAt: joinedAt
+        )
+    }
+}
+
+struct JoinEventRequest: Encodable {}
+
+// MARK: - Event Service
+
 @MainActor
 final class EventService: ObservableObject {
+    private let api = APIClient.shared
+
+    // Keep Supabase client for realtime subscriptions only
     private var client: SupabaseClient { SupabaseManager.shared.client }
     private var realtimeChannels: [String: RealtimeChannelV2] = [:]
 
@@ -13,261 +155,70 @@ final class EventService: ObservableObject {
         name: String,
         description: String?,
         location: String?,
+        locationName: String?,
+        locationAddress: String?,
+        locationLat: Double?,
+        locationLng: Double?,
         startTime: Date,
         endTime: Date
     ) async throws -> Event {
-        guard let authUser = client.auth.currentUser else {
-            throw EventError.notAuthenticated
-        }
-
-        // Fetch current user to get their id
-        let currentUser: AppUser = try await client
-            .from("users")
-            .select()
-            .eq("auth_id", value: authUser.id.uuidString)
-            .single()
-            .execute()
-            .value
-
-        let shareCode = generateShareCode()
-
-        struct NewEvent: Encodable {
-            let id: UUID
-            let hostId: UUID
-            let name: String
-            let description: String?
-            let location: String?
-            let startTime: Date
-            let endTime: Date
-            let status: String
-            let shareCode: String
-
-            enum CodingKeys: String, CodingKey {
-                case id
-                case hostId = "host_id"
-                case name
-                case description
-                case location
-                case startTime = "start_time"
-                case endTime = "end_time"
-                case status
-                case shareCode = "share_code"
-            }
-        }
-
-        let newEvent = NewEvent(
-            id: UUID(),
-            hostId: currentUser.id,
+        let request = CreateEventRequest(
             name: name,
             description: description,
             location: location,
+            locationName: locationName,
+            locationAddress: locationAddress,
+            locationLat: locationLat,
+            locationLng: locationLng,
             startTime: startTime,
-            endTime: endTime,
-            status: "live",
-            shareCode: shareCode
+            endTime: endTime
         )
 
-        let event: Event = try await client
-            .from("events")
-            .insert(newEvent)
-            .select()
-            .single()
-            .execute()
-            .value
-
-        // Add host as event member
-        struct NewMember: Encodable {
-            let eventId: UUID
-            let userId: UUID
-            let role: String
-
-            enum CodingKeys: String, CodingKey {
-                case eventId = "event_id"
-                case userId = "user_id"
-                case role
-            }
-        }
-
-        let hostMember = NewMember(
-            eventId: event.id,
-            userId: currentUser.id,
-            role: "host"
-        )
-
-        try await client
-            .from("event_members")
-            .insert(hostMember)
-            .execute()
-
+        let event: Event = try await api.post("/events", body: request)
         return event
     }
 
     // MARK: - Fetch
 
-    func fetchMyEvents() async throws -> [Event] {
-        guard let authUser = client.auth.currentUser else {
-            throw EventError.notAuthenticated
-        }
-
-        let currentUser: AppUser = try await client
-            .from("users")
-            .select()
-            .eq("auth_id", value: authUser.id.uuidString)
-            .single()
-            .execute()
-            .value
-
-        let memberships: [EventMember] = try await client
-            .from("event_members")
-            .select()
-            .eq("user_id", value: currentUser.id.uuidString)
-            .execute()
-            .value
-
-        let eventIds = memberships.map { $0.eventId.uuidString }
-        guard !eventIds.isEmpty else { return [] }
-
-        let events: [Event] = try await client
-            .from("events")
-            .select()
-            .in("id", values: eventIds)
-            .order("created_at", ascending: false)
-            .execute()
-            .value
-
+    func fetchMyEvents() async throws -> [EventWithCounts] {
+        let events: [EventWithCounts] = try await api.get("/events")
         return events
     }
 
     func fetchEvent(byShareCode shareCode: String) async throws -> Event? {
-        let events: [Event] = try await client
-            .from("events")
-            .select()
-            .eq("share_code", value: shareCode)
-            .limit(1)
-            .execute()
-            .value
-
-        return events.first
+        let event: Event = try await api.get("/events/join/\(shareCode)", requiresAuth: false)
+        return event
     }
 
     func fetchEvent(byId id: UUID) async throws -> Event {
-        let event: Event = try await client
-            .from("events")
-            .select()
-            .eq("id", value: id.uuidString)
-            .single()
-            .execute()
-            .value
-
+        let event: Event = try await api.get("/events/\(id.uuidString)")
         return event
     }
 
     // MARK: - Update
 
     func endEvent(id: UUID) async throws {
-        try await client
-            .from("events")
-            .update(["status": "ended"])
-            .eq("id", value: id.uuidString)
-            .execute()
+        let _: EmptyResponse = try await api.post("/events/\(id.uuidString)/end", body: EmptyRequest())
     }
 
     // MARK: - Members
 
     func joinEvent(eventId: UUID, userId: UUID) async throws {
-        struct NewMember: Encodable {
-            let eventId: UUID
-            let userId: UUID
-            let role: String
-
-            enum CodingKeys: String, CodingKey {
-                case eventId = "event_id"
-                case userId = "user_id"
-                case role
-            }
-        }
-
-        let member = NewMember(
-            eventId: eventId,
-            userId: userId,
-            role: "attendee"
-        )
-
-        try await client
-            .from("event_members")
-            .insert(member)
-            .execute()
+        let _: EmptyResponse = try await api.post("/events/\(eventId.uuidString)/join", body: JoinEventRequest())
     }
 
-    func fetchMembers(eventId: UUID) async throws -> [EventMember] {
-        let members: [EventMember] = try await client
-            .from("event_members")
-            .select()
-            .eq("event_id", value: eventId.uuidString)
-            .execute()
-            .value
-
+    func fetchMembers(eventId: UUID) async throws -> [MemberWithUser] {
+        let members: [MemberWithUser] = try await api.get("/events/\(eventId.uuidString)/members")
         return members
     }
 
-    func fetchMembersWithUsers(eventId: UUID) async throws -> [(EventMember, AppUser)] {
-        struct MemberWithUser: Decodable {
-            let id: UUID
-            let eventId: UUID
-            let userId: UUID
-            let role: EventMember.MemberRole
-            let hasDeveloped: Bool
-            let developedAt: Date?
-            let joinedAt: Date
-            let users: AppUser
-
-            enum CodingKeys: String, CodingKey {
-                case id
-                case eventId = "event_id"
-                case userId = "user_id"
-                case role
-                case hasDeveloped = "has_developed"
-                case developedAt = "developed_at"
-                case joinedAt = "joined_at"
-                case users
-            }
-        }
-
-        let rows: [MemberWithUser] = try await client
-            .from("event_members")
-            .select("*, users(*)")
-            .eq("event_id", value: eventId.uuidString)
-            .execute()
-            .value
-
-        return rows.map { row in
-            let member = EventMember(
-                id: row.id,
-                eventId: row.eventId,
-                userId: row.userId,
-                role: row.role,
-                hasDeveloped: row.hasDeveloped,
-                developedAt: row.developedAt,
-                joinedAt: row.joinedAt
-            )
-            return (member, row.users)
-        }
-    }
-
     func getMembership(eventId: UUID, userId: UUID) async throws -> EventMember? {
-        let members: [EventMember] = try await client
-            .from("event_members")
-            .select()
-            .eq("event_id", value: eventId.uuidString)
-            .eq("user_id", value: userId.uuidString)
-            .limit(1)
-            .execute()
-            .value
-
-        return members.first
+        // Fetch all members and find the matching one
+        let members = try await fetchMembers(eventId: eventId)
+        return members.first(where: { $0.userId == userId })?.toEventMember
     }
 
-    // MARK: - Realtime
+    // MARK: - Realtime (still uses Supabase directly)
 
     func subscribeToPhotoCount(eventId: UUID, onUpdate: @escaping (Int) -> Void) {
         let channelKey = "photos-\(eventId.uuidString)"
@@ -284,7 +235,7 @@ final class EventService: ObservableObject {
             await channel.subscribe()
 
             for await _ in changes {
-                // Fetch updated count after each insert
+                // Fetch updated count via API
                 if let count = try? await self.getPhotoCount(eventId: eventId) {
                     onUpdate(count)
                 }
@@ -321,21 +272,9 @@ final class EventService: ObservableObject {
 
     // MARK: - Helpers
 
-    private func generateShareCode() -> String {
-        let characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        return String((0..<6).map { _ in characters.randomElement()! })
-    }
-
     private func getPhotoCount(eventId: UUID) async throws -> Int {
-        struct IdOnly: Decodable { let id: UUID }
-        let rows: [IdOnly] = try await client
-            .from("photos")
-            .select("id")
-            .eq("event_id", value: eventId.uuidString)
-            .execute()
-            .value
-
-        return rows.count
+        let response: PhotoCountResponse = try await api.get("/events/\(eventId.uuidString)/photos/count")
+        return response.count
     }
 
     // MARK: - Errors
@@ -351,3 +290,5 @@ final class EventService: ObservableObject {
         }
     }
 }
+
+private struct EmptyRequest: Encodable {}

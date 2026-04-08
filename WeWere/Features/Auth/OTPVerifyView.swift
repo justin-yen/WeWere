@@ -11,8 +11,8 @@ struct OTPVerifyView: View {
 
     @State private var code = ""
     @State private var isLoading = false
+    @State private var hasVerified = false
     @State private var resendCooldown = 0
-    @FocusState private var isCodeFocused: Bool
 
     private var formattedPhone: String {
         "+1\(phoneNumber)"
@@ -31,28 +31,12 @@ struct OTPVerifyView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, WeWereSpacing.xl)
 
-            // OTP code field
-            TextField("000000", text: $code)
-                .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 32))
-                .foregroundStyle(WeWereColors.onSurface)
-                .multilineTextAlignment(.center)
-                .keyboardType(.numberPad)
+            // OTP code field (UITextField wrapper for proper autofill support)
+            OTPTextField(code: $code, onComplete: verifyCode)
                 .frame(height: 56)
                 .background(Color(hex: "191919"))
                 .cornerRadius(WeWereRadius.lg)
                 .padding(.horizontal, WeWereSpacing.xxl)
-                .focused($isCodeFocused)
-                .onChange(of: code) { _, newValue in
-                    // Only allow digits, max 6
-                    let filtered = String(newValue.filter { $0.isNumber }.prefix(6))
-                    if filtered != newValue {
-                        code = filtered
-                    }
-                    // Auto-submit when 6 digits entered
-                    if filtered.count == 6 {
-                        verifyCode()
-                    }
-                }
 
             if let error = errorMessage {
                 Text(error)
@@ -117,14 +101,14 @@ struct OTPVerifyView: View {
             .padding(.top, WeWereSpacing.xs)
         }
         .onAppear {
-            isCodeFocused = true
             startResendCooldown()
         }
     }
 
     private func verifyCode() {
-        guard code.count == 6, !isLoading else { return }
+        guard code.count == 6, !isLoading, !hasVerified else { return }
         isLoading = true
+        hasVerified = true
         errorMessage = nil
 
         Task {
@@ -132,6 +116,7 @@ struct OTPVerifyView: View {
                 try await authService.verifyOTP(phoneNumber: formattedPhone, code: code)
                 onVerified()
             } catch {
+                hasVerified = false
                 errorMessage = "Invalid code. Please try again."
                 print("OTP verify error: \(error)")
             }

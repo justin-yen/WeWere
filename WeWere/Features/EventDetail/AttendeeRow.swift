@@ -12,12 +12,12 @@ struct AttendeeRow: View {
                 .fill(WeWereColors.secondaryContainer)
                 .frame(width: 36, height: 36)
                 .overlay(
-                    Text(user.displayName.prefix(1).uppercased())
+                    Text(user.resolvedDisplayName.prefix(1).uppercased())
                         .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
                         .foregroundStyle(WeWereColors.onSurfaceVariant)
                 )
 
-            Text(user.displayName)
+            Text(user.resolvedDisplayName)
                 .font(.custom(WeWereFontFamily.jakartaRegular, size: 14))
                 .foregroundStyle(WeWereColors.onSurface)
                 .lineLimit(1)

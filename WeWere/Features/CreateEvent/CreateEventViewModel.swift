@@ -5,6 +5,10 @@ class CreateEventViewModel: ObservableObject {
     @Published var name = ""
     @Published var description = ""
     @Published var location = ""
+    @Published var locationName: String?
+    @Published var locationAddress: String?
+    @Published var locationLat: Double?
+    @Published var locationLng: Double?
     @Published var startDate = Date()
     @Published var startHour = Calendar.current.component(.hour, from: Date())
     @Published var startMinute = 0  // 0 or 30
@@ -42,6 +46,22 @@ class CreateEventViewModel: ObservableObject {
         return nameValid
     }
 
+    func clearLocation() {
+        location = ""
+        locationName = nil
+        locationAddress = nil
+        locationLat = nil
+        locationLng = nil
+    }
+
+    func setLocation(name: String, address: String, lat: Double, lng: Double) {
+        locationName = name
+        locationAddress = address
+        locationLat = lat
+        locationLng = lng
+        location = name
+    }
+
     func createEvent() async throws -> Event {
         isCreating = true
         defer { isCreating = false }
@@ -53,6 +73,10 @@ class CreateEventViewModel: ObservableObject {
             name: name,
             description: description.isEmpty ? nil : description,
             location: location.isEmpty ? nil : location,
+            locationName: locationName,
+            locationAddress: locationAddress,
+            locationLat: locationLat,
+            locationLng: locationLng,
             startTime: startTime,
             endTime: resolvedEndTime
         )

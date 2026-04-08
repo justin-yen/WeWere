@@ -12,7 +12,7 @@ enum Route: Hashable {
     case developFilm(UUID)
     case developingAnimation(UUID)
     case album(UUID)
-    case photoDetail(UUID)
+    case photoDetail(UUID, URL?, UUID?) // photoId, signedURL, eventId
     case joinEvent(shareCode: String)
     case createEvent
 }

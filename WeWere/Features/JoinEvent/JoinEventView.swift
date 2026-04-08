@@ -13,185 +13,172 @@ struct JoinEventView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Header bar
-                HStack {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 20))
-                        .foregroundStyle(WeWereColors.onSurface)
-
-                    Spacer()
-
+                // Header
+                ZStack {
                     Text("WEWERE")
                         .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 18))
+                        .tracking(4)
                         .foregroundStyle(.white)
 
-                    Spacer()
-
-                    Image(systemName: "bell")
-                        .font(.system(size: 20))
-                        .foregroundStyle(WeWereColors.onSurface)
+                    HStack {
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(WeWereColors.onSurface)
+                        }
+                        Spacer()
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, 24)
+                .padding(.bottom, 32)
 
                 // Invitation label
-                Text("INVITATION NO. 882-01 | 2024 ED.")
-                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
+                Text("YOU'VE BEEN INVITED")
+                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 11))
                     .foregroundStyle(WeWereColors.outline)
                     .tracking(2)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 24)
 
                 // Event banner placeholder
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(WeWereColors.surfaceContainerHigh)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "1a1a2e"), Color(hex: "0f0f0f")],
+                            startPoint: .topTrailing,
+                            endPoint: .bottomLeading
+                        )
+                    )
                     .frame(height: 180)
-                    .overlay {
-                        if let event = viewModel.event,
-                           let coverUrl = event.coverImageUrl,
-                           let url = URL(string: coverUrl) {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                EmptyView()
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 24)
 
-                // Event name
                 if let event = viewModel.event {
+                    // Event name
                     Text(event.name)
-                        .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 24))
+                        .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
                         .foregroundStyle(.white)
                         .padding(.bottom, 8)
 
-                    // Location / time
+                    // Location
+                    if let location = event.location, !location.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin")
+                                .font(.system(size: 11))
+                            Text(location)
+                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 13))
+                        }
+                        .foregroundStyle(WeWereColors.outline)
+                        .padding(.bottom, 4)
+                    }
+
+                    // Date/time
                     Text(event.startTime, style: .date)
                         .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
                         .foregroundStyle(WeWereColors.outline)
-                        + Text(" at ")
-                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                        .foregroundStyle(WeWereColors.outline)
-                        + Text(event.startTime, style: .time)
-                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                        .foregroundStyle(WeWereColors.outline)
+
+                    // Status badge
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(event.isLive ? .green : WeWereColors.outline)
+                            .frame(width: 6, height: 6)
+                        Text(event.isLive ? "LIVE NOW" : "ENDED")
+                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
+                            .tracking(1)
+                    }
+                    .foregroundStyle(event.isLive ? .green : WeWereColors.outline)
+                    .padding(.top, 12)
+
                 } else if viewModel.isLoading {
                     ProgressView()
                         .tint(.white)
                         .padding(.vertical, 20)
+                } else if viewModel.error != nil {
+                    Text("Event not found")
+                        .font(.custom(WeWereFontFamily.jakartaRegular, size: 14))
+                        .foregroundStyle(WeWereColors.error)
                 }
 
-                // Divider
-                RadialGradient(
-                    colors: [WeWereColors.outlineVariant, Color.clear],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: 200
-                )
-                .frame(height: 1)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
-
-                // Identity section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("IDENTITY")
-                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 11))
-                        .foregroundStyle(WeWereColors.outline)
-                        .tracking(2)
-
-                    TextField("", text: $viewModel.displayName, prompt:
-                        Text("ENTER YOUR NAME")
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 14))
-                            .foregroundStyle(WeWereColors.outlineVariant)
-                    )
-                    .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 14))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(height: 48)
-                    .background(Color(hex: "191919"))
-                    .cornerRadius(8)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                Spacer().frame(height: 40)
 
                 // Join button
-                Button {
-                    Task {
-                        do {
-                            try await viewModel.joinEvent()
-                            dismiss()
-                        } catch {
-                            viewModel.error = error.localizedDescription
+                if let event = viewModel.event, event.isLive {
+                    if viewModel.hasJoined {
+                        // Success state
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.green)
+                            Text("You're in!")
+                                .font(.custom(WeWereFontFamily.jakartaBold, size: 18))
+                                .foregroundStyle(.white)
                         }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("JOIN EVENT")
-                            .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                        .padding(.bottom, 20)
 
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 14, weight: .bold))
+                        Button {
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                appState.navigationPath.append(Route.eventDetail(event.id))
+                            }
+                        } label: {
+                            Text("GO TO EVENT")
+                                .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                                .foregroundStyle(Color(hex: "1a1c1c"))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                                .background(
+                                    LinearGradient(
+                                        colors: [.white, Color(hex: "d4d4d4")],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 20)
+                    } else {
+                        Button {
+                            Task { await viewModel.joinEvent() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if viewModel.isJoining {
+                                    ProgressView().tint(Color(hex: "1a1c1c"))
+                                } else {
+                                    Text("JOIN EVENT")
+                                        .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                            }
+                            .foregroundStyle(Color(hex: "1a1c1c"))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(
+                                LinearGradient(
+                                    colors: [.white, Color(hex: "d4d4d4")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(12)
+                        }
+                        .disabled(viewModel.isJoining)
+                        .padding(.horizontal, 20)
                     }
-                    .foregroundStyle(Color(hex: "1a1c1c"))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(
-                        LinearGradient(
-                            colors: [.white, Color(hex: "d4d4d4")],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(12)
                 }
-                .disabled(viewModel.isJoining || viewModel.displayName.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(viewModel.displayName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
 
-                // Terms text
+                // Terms
                 Text("By joining, you agree to share photos taken during this event with all attendees.")
                     .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 9))
                     .foregroundStyle(WeWereColors.outlineVariant)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
-                    .padding(.bottom, 24)
-
-                // Footer
-                if let event = viewModel.event {
-                    HStack {
-                        Text(event.startTime, style: .date)
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                            .foregroundStyle(WeWereColors.outline)
-
-                        Spacer()
-
-                        Text(event.status == .live ? "LIVE" : "ENDED")
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                            .foregroundStyle(WeWereColors.outline)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
-                }
+                    .padding(.top, 16)
             }
         }
         .background(WeWereColors.surface.ignoresSafeArea())
         .task {
             await viewModel.loadEvent()
-        }
-        .alert("Error", isPresented: Binding(
-            get: { viewModel.error != nil },
-            set: { if !$0 { viewModel.error = nil } }
-        )) {
-            Button("OK") { viewModel.error = nil }
-        } message: {
-            Text(viewModel.error ?? "")
         }
     }
 }

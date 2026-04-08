@@ -83,12 +83,57 @@ struct PhoneEntryView: View {
 
             Spacer()
 
+            #if DEBUG
+            // Test login buttons (simulator / debug builds only)
+            VStack(spacing: WeWereSpacing.xs) {
+                Text("DEV TEST ACCOUNTS")
+                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
+                    .foregroundStyle(WeWereColors.outlineVariant)
+                    .tracking(1)
+
+                HStack(spacing: WeWereSpacing.xs) {
+                    ForEach(["test1", "test2", "test3"], id: \.self) { testId in
+                        Button {
+                            testLogin(testId: testId)
+                        } label: {
+                            Text(testId.uppercased())
+                                .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 11))
+                                .foregroundStyle(WeWereColors.onSurface)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(WeWereColors.surfaceContainerHigh)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .disabled(isLoading)
+                    }
+                }
+            }
+            .padding(.bottom, WeWereSpacing.md)
+            #endif
+
             Text("By continuing, you agree to our Terms")
                 .font(.custom(WeWereFontFamily.jakartaRegular, size: 11))
                 .foregroundStyle(WeWereColors.outlineVariant)
                 .padding(.bottom, WeWereSpacing.xl)
         }
     }
+
+    #if DEBUG
+    private func testLogin(testId: String) {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                try await authService.testLogin(testId: testId)
+            } catch {
+                errorMessage = "Test login failed: \(error.localizedDescription)"
+                print("Test login error: \(error)")
+            }
+            isLoading = false
+        }
+    }
+    #endif
 
     private func sendOTP() {
         guard isValid else { return }

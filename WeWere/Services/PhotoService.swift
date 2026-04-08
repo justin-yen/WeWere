@@ -1,155 +1,128 @@
 import Foundation
 import Supabase
 
+// MARK: - Backend Response Types
+
+/// Photo response from backend includes signed URLs
+struct PhotoResponse: Decodable, Identifiable, Hashable {
+    let id: UUID
+    let eventId: UUID
+    let userId: UUID
+    let storagePath: String
+    var filteredStoragePath: String?
+    var width: Int?
+    var height: Int?
+    var filterApplied: Bool?
+    let createdAt: Date
+    var signedUrl: String?
+    var user: PhotoUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case eventId = "event_id"
+        case userId = "user_id"
+        case storagePath = "storage_path"
+        case filteredStoragePath = "filtered_storage_path"
+        case width
+        case height
+        case filterApplied = "filter_applied"
+        case createdAt = "created_at"
+        case signedUrl = "signed_url"
+        case user
+    }
+}
+
+struct PhotoUser: Decodable, Hashable {
+    let id: UUID
+    var firstName: String?
+    var lastName: String?
+    var displayName: String?
+    var instagramHandle: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case displayName = "display_name"
+        case instagramHandle = "instagram_handle"
+    }
+
+    var resolvedDisplayName: String {
+        if let dn = displayName, !dn.isEmpty { return dn }
+        let first = firstName ?? ""
+        let last = lastName ?? ""
+        let full = "\(first) \(last)".trimmingCharacters(in: .whitespaces)
+        return full.isEmpty ? "Unknown" : full
+    }
+}
+
+extension PhotoResponse {
+    var toPhoto: Photo {
+        Photo(
+            id: id,
+            eventId: eventId,
+            userId: userId,
+            storagePath: storagePath,
+            filteredStoragePath: filteredStoragePath,
+            width: width,
+            height: height,
+            filterApplied: filterApplied ?? false,
+            createdAt: createdAt
+        )
+    }
+}
+
+struct PhotoCountResponse: Decodable {
+    let count: Int
+}
+
+// MARK: - Photo Service
+
 @MainActor
 final class PhotoService: ObservableObject {
-    private var client: SupabaseClient { SupabaseManager.shared.client }
+    private let api = APIClient.shared
 
+    // Keep Supabase client for downloading photos (storage) if needed
+    private var client: SupabaseClient { SupabaseManager.shared.client }
     private let bucketName = "event-photos"
 
     // MARK: - Upload
 
     func uploadPhoto(eventId: UUID, imageData: Data) async throws -> Photo {
-        guard let authUser = client.auth.currentUser else {
-            throw PhotoError.notAuthenticated
-        }
-
-        let currentUser: AppUser = try await client
-            .from("users")
-            .select()
-            .eq("auth_id", value: authUser.id.uuidString)
-            .single()
-            .execute()
-            .value
-
-        let photoId = UUID()
-        let storagePath = "\(eventId.uuidString)/originals/\(photoId.uuidString).heic"
-
-        try await client.storage
-            .from(bucketName)
-            .upload(
-                path: storagePath,
-                file: imageData,
-                options: FileOptions(contentType: "image/heic")
-            )
-
-        struct NewPhoto: Encodable {
-            let id: UUID
-            let eventId: UUID
-            let userId: UUID
-            let storagePath: String
-            let filterApplied: Bool
-
-            enum CodingKeys: String, CodingKey {
-                case id
-                case eventId = "event_id"
-                case userId = "user_id"
-                case storagePath = "storage_path"
-                case filterApplied = "filter_applied"
-            }
-        }
-
-        let newPhoto = NewPhoto(
-            id: photoId,
-            eventId: eventId,
-            userId: currentUser.id,
-            storagePath: storagePath,
-            filterApplied: false
+        let response: PhotoResponse = try await api.upload(
+            path: "/events/\(eventId.uuidString)/photos",
+            fileData: imageData,
+            fileName: "\(UUID().uuidString).heic",
+            mimeType: "image/heic"
         )
 
-        let photo: Photo = try await client
-            .from("photos")
-            .insert(newPhoto)
-            .select()
-            .single()
-            .execute()
-            .value
-
-        // Trigger retro filter edge function directly
-        Task {
-            await triggerRetroFilter(photo: photo)
-        }
-
-        return photo
-    }
-
-    /// Calls the apply-retro-filter edge function for a given photo
-    private func triggerRetroFilter(photo: Photo) async {
-        do {
-            let url = URL(string: "\(Secrets.supabaseURL)/functions/v1/apply-retro-filter")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-
-            let body: [String: Any] = [
-                "record": [
-                    "id": photo.id.uuidString,
-                    "event_id": photo.eventId.uuidString,
-                    "storage_path": photo.storagePath
-                ]
-            ]
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse {
-                let responseText = String(data: data, encoding: .utf8) ?? ""
-                print("Retro filter response (\(httpResponse.statusCode)): \(responseText)")
-            }
-        } catch {
-            print("Failed to trigger retro filter: \(error)")
-        }
+        return response.toPhoto
     }
 
     // MARK: - Fetch
 
-    func fetchPhotos(eventId: UUID) async throws -> [Photo] {
-        let photos: [Photo] = try await client
-            .from("photos")
-            .select()
-            .eq("event_id", value: eventId.uuidString)
-            .order("created_at")
-            .execute()
-            .value
-
+    func fetchPhotos(eventId: UUID) async throws -> [PhotoResponse] {
+        let photos: [PhotoResponse] = try await api.get("/events/\(eventId.uuidString)/photos")
         return photos
     }
 
     func getPhotoCount(eventId: UUID) async throws -> Int {
-        struct IdOnly: Decodable { let id: UUID }
-        let rows: [IdOnly] = try await client
-            .from("photos")
-            .select("id")
-            .eq("event_id", value: eventId.uuidString)
-            .execute()
-            .value
-
-        return rows.count
+        let response: PhotoCountResponse = try await api.get("/events/\(eventId.uuidString)/photos/count")
+        return response.count
     }
 
-    // MARK: - URLs & Downloads
+    // MARK: - URLs
 
+    /// Get URL for a photo -- backend provides signed URLs in photo list responses
     func getFilteredPhotoURL(photo: Photo) -> URL? {
+        // This is a fallback for when we don't have a signed URL from the backend
         let path = photo.filteredStoragePath ?? photo.storagePath
-        return getSignedURL(path: path)
-    }
-
-    func getSignedURL(path: String) -> URL? {
-        // For private buckets, use createSignedURL
-        // For now, construct the URL directly using the storage API
         let baseURL = Secrets.supabaseURL
         let urlString = "\(baseURL)/storage/v1/object/authenticated/\(bucketName)/\(path)"
         return URL(string: urlString)
     }
 
-    /// Creates a signed URL that expires after the given duration
-    func createSignedURL(path: String, expiresIn: Int = 3600) async throws -> URL {
-        let url = try await client.storage
-            .from(bucketName)
-            .createSignedURL(path: path, expiresIn: expiresIn)
-        return url
-    }
-
+    /// Downloads photo data via Supabase storage (for saving to library)
     func downloadPhotoData(photo: Photo) async throws -> Data {
         let data = try await client.storage
             .from(bucketName)

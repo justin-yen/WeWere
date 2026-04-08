@@ -5,13 +5,12 @@ class JoinEventViewModel: ObservableObject {
     let shareCode: String
 
     @Published var event: Event?
-    @Published var displayName: String = ""
     @Published var isLoading = true
     @Published var isJoining = false
+    @Published var hasJoined = false
     @Published var error: String?
 
     private let eventService = EventService()
-    private let authService = AuthService()
 
     init(shareCode: String) {
         self.shareCode = shareCode
@@ -19,32 +18,28 @@ class JoinEventViewModel: ObservableObject {
 
     func loadEvent() async {
         isLoading = true
-        event = try? await eventService.fetchEvent(byShareCode: shareCode)
+        do {
+            event = try await eventService.fetchEvent(byShareCode: shareCode)
+        } catch {
+            self.error = "Event not found"
+            print("Failed to load event by share code: \(error)")
+        }
         isLoading = false
     }
 
-    func joinEvent() async throws {
-        guard let event = event,
-              !displayName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+    func joinEvent() async {
+        guard let event = event else { return }
 
         isJoining = true
         defer { isJoining = false }
 
-        // Update display name
-        try await authService.updateDisplayName(displayName)
-
-        // Join as attendee
-        let client = SupabaseManager.shared.client
-        let userId = try await client.auth.session.user.id
-
-        let currentUser: AppUser = try await client
-            .from("users")
-            .select()
-            .eq("auth_id", value: userId.uuidString)
-            .single()
-            .execute()
-            .value
-
-        try await eventService.joinEvent(eventId: event.id, userId: currentUser.id)
+        do {
+            try await eventService.joinEvent(eventId: event.id, userId: UUID())
+            hasJoined = true
+            NotificationCenter.default.post(name: .eventCreated, object: nil)
+        } catch {
+            self.error = "Failed to join event"
+            print("Join event error: \(error)")
+        }
     }
 }

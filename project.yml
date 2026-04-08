@@ -43,9 +43,3 @@ targets:
         ENABLE_PREVIEWS: YES
     dependencies:
       - package: Supabase
-    entitlements:
-      path: WeWere/WeWere.entitlements
-      properties:
-        com.apple.developer.associated-domains:
-          - "applinks:wewere.app"
-        aps-environment: development

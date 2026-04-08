@@ -66,7 +66,7 @@ struct LiveEventCard: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: 13))
-                                Text("Expose")
+                                Text("Open Camera")
                                     .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
                             }
                             .foregroundStyle(Color(hex: "1a1c1c"))

@@ -1,72 +1,54 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject var viewModel = HomeViewModel()
+    @StateObject private var photoStackViewModel = PhotoStackViewModel()
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var viewModel: SharedEventsViewModel
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
-                    // MARK: - Header Bar
-                    headerBar
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
+                // MARK: - Header Bar
+                headerBar
 
-                    // MARK: - Live Events
-                    if !viewModel.liveEvents.isEmpty {
-                        liveEventsSection
-                    }
-
-                    // MARK: - Past Events
-                    if !viewModel.readyToDevelop.isEmpty || !viewModel.developedEvents.isEmpty {
-                        pastEventsSection
-                    }
-
-                    // MARK: - Empty State
-                    if !viewModel.isLoading && viewModel.events.isEmpty {
-                        emptyState
-                    }
-
-                    Spacer(minLength: 100)
+                // MARK: - Live Events
+                if !viewModel.liveEvents.isEmpty {
+                    liveEventsSection
                 }
-                .padding(.horizontal, WeWereSpacing.md)
-                .padding(.top, WeWereSpacing.sm)
-            }
 
-            // MARK: - Create Event FAB
-            Button {
-                appState.presentedSheet = .createEvent
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#1a1c1c"))
-                    .frame(width: 56, height: 56)
-                    .background(
-                        LinearGradient(
-                            colors: [.white, Color(hex: "#d4d4d4")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .clipShape(Circle())
-                    .shadow(color: .white.opacity(0.1), radius: 8, y: 2)
+                // MARK: - Ready to Develop
+                if !viewModel.readyToDevelop.isEmpty {
+                    readyToDevelopSection
+                }
+
+                // MARK: - Past Moments Photo Stack
+                if !photoStackViewModel.stackPhotos.isEmpty || !viewModel.developedEvents.isEmpty {
+                    pastMomentsSection
+                }
+
+                // MARK: - Empty State
+                if !viewModel.isLoading && viewModel.liveEvents.isEmpty && viewModel.readyToDevelop.isEmpty && viewModel.developedEvents.isEmpty {
+                    emptyState
+                }
+
+                Spacer(minLength: 100)
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 80)
+            .padding(.horizontal, WeWereSpacing.md)
+            .padding(.top, WeWereSpacing.sm)
         }
         .background(Color(hex: "#131313").ignoresSafeArea())
-        .task(id: authService.isAuthenticated) {
-            guard authService.isAuthenticated else { return }
-            await viewModel.loadEvents()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .eventCreated)) { _ in
-            Task { await viewModel.loadEvents() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .eventUpdated)) { _ in
-            Task { await viewModel.loadEvents() }
+        .onChange(of: viewModel.developedEvents.count) { _, newCount in
+            guard newCount > 0 else { return }
+            let events = viewModel.developedEvents
+            Task.detached { @MainActor in
+                await photoStackViewModel.loadPhotos(developedEvents: events)
+            }
         }
         .refreshable {
+            photoStackViewModel.invalidateCache()
             await viewModel.loadEvents()
+            await photoStackViewModel.loadPhotos(developedEvents: viewModel.developedEvents)
         }
     }
 
@@ -103,7 +85,7 @@ struct HomeView: View {
                 count: viewModel.liveEvents.count
             )
 
-            TabView {
+            VStack(spacing: WeWereSpacing.sm) {
                 ForEach(viewModel.liveEvents) { event in
                     NavigationLink(value: Route.eventDetail(event.id)) {
                         LiveEventCard(
@@ -116,31 +98,21 @@ struct HomeView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, WeWereSpacing.xxxs)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: viewModel.liveEvents.count > 1 ? .automatic : .never))
-            .frame(height: 296)
         }
     }
 
     // MARK: - Past Events Section
 
-    private var pastEventsSection: some View {
-        VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
-            sectionHeader(title: "PAST EVENTS", count: nil)
+    private var readyToDevelopSection: some View {
+        VStack(alignment: .leading, spacing: WeWereSpacing.sm) {
+            sectionHeader(title: "READY TO DEVELOP", count: viewModel.readyToDevelop.count)
 
             VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
                 ForEach(viewModel.readyToDevelop) { event in
                     NavigationLink(value: Route.developFilm(event.id)) {
                         PastEventRow(event: event, isReadyToDevelop: true)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                ForEach(viewModel.developedEvents) { event in
-                    NavigationLink(value: Route.album(event.id)) {
-                        PastEventRow(event: event, isReadyToDevelop: false)
                     }
                     .buttonStyle(.plain)
                 }
@@ -190,18 +162,34 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Past Moments Section
+
+    private var pastMomentsSection: some View {
+        VStack(alignment: .leading, spacing: WeWereSpacing.sm) {
+            sectionHeader(title: "PAST MOMENTS", count: nil)
+
+            if photoStackViewModel.stackPhotos.isEmpty {
+                PhotoStackEmptyView()
+            } else {
+                PhotoStackView(photos: photoStackViewModel.stackPhotos) { photo in
+                    appState.navigationPath.append(Route.photoDetail(photo.photoId, photo.url, photo.eventId))
+                }
+            }
+        }
+    }
+
     // MARK: - Section Header
 
     private func sectionHeader(title: String, count: Int?) -> some View {
         HStack(spacing: WeWereSpacing.xs) {
             Text(title)
-                .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 20))
                 .tracking(2)
-                .foregroundStyle(WeWereColors.onSurfaceVariant)
+                .foregroundStyle(WeWereColors.onSurface)
 
             if let count {
                 Text("\(count)")
-                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 14))
                     .foregroundStyle(WeWereColors.outline)
             }
         }

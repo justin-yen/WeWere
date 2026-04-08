@@ -1,100 +1,61 @@
 # WeWere
 
-Disposable-camera-style iOS app for event photography. Attendees take photos during an event but can't see them until the host ends the event and each user "develops" their film.
-
-## Quick Reference
-
-- **PRD**: `PRD.md` — product requirements and feature specs
-- **TDD**: `TDD.md` — technical design, architecture, data models
-- **Xcode project**: generated via XcodeGen from `project.yml`
-
-## Tech Stack
-
-- **iOS**: Swift 5.9, SwiftUI, iOS 17+, iPhone only, dark mode only
-- **Backend**: Supabase (Auth, Postgres with RLS, Storage, Edge Functions, Realtime)
-- **Auth**: Phone number + SMS OTP via Twilio Verify → Supabase Auth session
-- **Camera**: AVFoundation
-- **Photo filter**: CoreImage client-side (Kodak Gold 200 aesthetic), plus server-side edge function
-- **Offline queue**: SwiftData for upload retries
-- **Dependencies**: `supabase-swift` 2.0+ (sole SPM dependency)
-
-## Project Structure
-
-```
-WeWere/
-├── WeWere/              # iOS app source
-│   ├── App/             # Entry point, AppState, AppDelegate, RootView
-│   ├── Design/          # Theme.swift (colors, fonts, spacing), reusable components
-│   ├── Features/        # Feature modules, each with View + ViewModel
-│   │   ├── Auth/        # Phone OTP sign-in, profile setup
-│   │   ├── Home/        # Event list (live + past sections)
-│   │   ├── Camera/      # Photo capture with AVFoundation
-│   │   ├── CreateEvent/ # Event creation form
-│   │   ├── JoinEvent/   # Join via share code
-│   │   ├── EventDetail/ # Event info, attendee list, end controls
-│   │   ├── DevelopFilm/ # "Develop your film" reveal flow
-│   │   ├── Album/       # Photo grid gallery
-│   │   ├── PhotoDetail/ # Full-screen photo, reactions, save
-│   │   └── Profile/     # User profile
-│   ├── Models/          # Codable data models (Event, Photo, User, etc.)
-│   ├── Services/        # Backend integration (AuthService, EventService, PhotoService, etc.)
-│   ├── Repositories/    # UploadQueue (SwiftData offline queue)
-│   └── Utilities/       # RetroFilter, ImageCompressor, HapticManager
-├── supabase/
-│   ├── migrations/      # Postgres schema migrations (001–003)
-│   ├── functions/       # Edge functions (apply-retro-filter, auto-end-events, send-push)
-│   └── config.toml
-├── project.yml          # XcodeGen project definition
-├── PRD.md
-└── TDD.md
-```
+## What is WeWere?
+WeWere is a disposable film camera iOS app. Users create events, invite friends via deep links, and take photos during the event -- but nobody can see the photos until the event ends and they "develop the film." Photos get a Portra 400 retro filter applied client-side before upload. After developing, users browse a shared gallery with emoji reactions, comments, and a polaroid-style "Past Moments" photo stack on the home screen.
 
 ## Architecture
 
-- **MVVM**: Each feature has a SwiftUI View paired with an `@Observable` ViewModel
-- **Services**: Singletons that wrap Supabase client calls (AuthService, EventService, PhotoService, ReactionService)
-- **SupabaseManager**: Shared singleton at `Services/SupabaseManager.swift` — holds the configured `SupabaseClient`
-- **AppState**: Global state for auth status and navigation routing
+### iOS App (Swift/SwiftUI, iOS 17+)
+- **Location:** `/WeWere/`
+- **Pattern:** MVVM with shared view models across tabs
+- **Key files:**
+  - `App/RootView.swift` -- Tab-based root with NavigationStack per tab
+  - `App/AppState.swift` -- Global navigation state, Route enum, deep link handling
+  - `Services/APIClient.swift` -- Centralized HTTP client pointing to Railway backend
+  - `Services/AuthService.swift` -- Phone OTP auth via backend (Twilio Verify)
+  - `Services/EventService.swift` -- Event CRUD, returns EventWithCounts from backend
+  - `Features/Home/SharedEventsViewModel.swift` -- Shared across Home and Events tabs
+  - `Features/Home/PhotoStackView.swift` -- Swipeable polaroid card stack
+  - `Utilities/RetroFilter.swift` -- Portra 400 Core Image filter pipeline
+  - `Design/Theme.swift` -- All color tokens, fonts (ClashDisplay, PlusJakartaSans, SpaceGrotesk), spacing
 
-## Key Patterns
+### Python Backend (FastAPI)
+- **Location:** `/backend/`
+- **Deployed:** Railway at `https://api-production-77f0.up.railway.app`
+- **Key files:**
+  - `routers/auth.py` -- Phone OTP via Twilio Verify, Supabase email+password session creation, test login
+  - `routers/events.py` -- CRUD, join, end, develop. Uses `auth_id` → `_get_internal_user_id()` for all queries
+  - `routers/photos.py` -- Upload, list with signed URLs, count, peak time, comments
+  - `routers/feed.py` -- `/feed/random-photos` endpoint for the home photo stack (single call, batch signed URLs)
+  - `routers/places.py` -- Google Places Autocomplete proxy for location search
+  - `routers/reactions.py` -- Emoji reactions with user info for long-press display
+  - `middleware/auth.py` -- JWT decode supporting both HS256 and ES256 (no-verify fallback)
 
-- ViewModels are `@MainActor` and `@Observable`
-- Supabase queries use typed Codable models for insert/select
-- Date encoding/decoding uses ISO8601 with fractional seconds
-- Photos upload as HEIC to Supabase Storage, edge function converts to filtered JPEG
-- Event joining uses a 6-character alphanumeric share code (not the event ID)
-- Realtime subscriptions for live photo counts and event status changes
+### Supabase
+- **Project:** `xsvscfqnzybdxptijmqs`
+- **Tables:** users, events, event_members, photos, reactions, comments
+- **Storage:** `event-photos` bucket (private, signed URLs)
+- **Key pattern:** `users.id` is internal UUID, `users.auth_id` links to Supabase auth. All backend queries resolve `auth_id` → internal `id` via `_get_internal_user_id()`.
+- **RLS:** Uses `public.current_user_id()` SECURITY DEFINER function to avoid recursive policy lookups on the users table.
 
-## Database Tables
-
-- `users` — profile info, push token, auth_id
-- `events` — name, description, location, start/end time (end nullable), status, share_code
-- `event_members` — links users to events with role (host/attendee), has_developed flag
-- `photos` — storage paths for original + filtered, dimensions
-- `reactions` — emoji reactions on photos (unique per user+photo+emoji)
-
-## Build & Run
-
-```bash
-# Regenerate Xcode project after changing project.yml
-xcodegen generate
-
-# Run Supabase locally
-supabase start
-
-# Deploy edge functions
-supabase functions deploy apply-retro-filter
-supabase functions deploy auto-end-events
-supabase functions deploy send-push
-```
+## Common Gotchas
+- **`auth_id` vs `id`:** The Supabase auth user UUID (`sub` claim in JWT) is NOT the same as `users.id`. Every backend endpoint must call `_get_internal_user_id(client, auth_id)` first.
+- **Date decoding:** Supabase returns ISO 8601 strings. The SupabaseManager configures a custom decoder. The APIClient also has its own ISO 8601 decoder.
+- **Entitlements:** Personal dev team doesn't support Associated Domains or Push Notifications. The `project.yml` has no entitlements section. Don't add one or xcodegen will break builds.
+- **xcodegen:** Run `xcodegen generate --spec project.yml` after adding/removing Swift files. The `.xcodeproj` is gitignored.
+- **Secrets:** iOS secrets in `WeWere/Secrets.swift` (gitignored). Backend secrets in `.env` + Railway env vars.
+- **Twilio:** Uses Verify (not raw SMS). The phone-to-email pattern is `{digits}@wewere.phone` (no `+` prefix). Password is `sha256("wewere-{phone}")`.
+- **Signed URLs:** Photos in Supabase Storage are private. The backend generates signed URLs (1hr expiry) via `get_signed_urls()` batch call.
+- **Photo orientation:** Camera captures are normalized via `RetroFilter.normalizeOrientation()` before filter application. `videoRotationAngle = 90` is set on the capture connection.
 
 ## Design System
+- **Theme:** Dark only. Surface `#131313`, on-surface `#e2e2e2`.
+- **Fonts:** ClashDisplay-Semibold (brand/headers), PlusJakartaSans (body), SpaceGrotesk (labels/metadata)
+- **Buttons:** "Brushed chrome" = LinearGradient white→#d4d4d4, text in #1a1c1c
+- **No borders:** Use tonal layering (surface container hierarchy) for depth
+- **Stitch project ID:** `10757421569687931481` (Google Stitch, has all screen designs)
 
-- Dark-only theme — all colors defined in `Theme.swift` via hex values
-- Typography: Plus Jakarta Sans (body), Space Grotesk (headings), Clash Display (display)
-- Custom components: FilmGrainOverlay, BrushedChromeButton, DarkroomGlow, NoirDivider, TabBar
-- Retro/darkroom aesthetic throughout
-
-## Current Status
-
-Core flows are implemented: auth → create/join event → camera capture → filter → develop → album → reactions. See PRD.md "Open Questions" for unresolved decisions.
+## Deploy
+- **Backend:** `cd backend && railway up`
+- **iOS:** `xcodegen generate --spec project.yml` then build in Xcode
+- **DB migrations:** Paste SQL in Supabase Dashboard > SQL Editor

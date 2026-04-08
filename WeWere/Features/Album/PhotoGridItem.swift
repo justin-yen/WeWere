@@ -11,10 +11,7 @@ struct PhotoGridItem: View {
                 Rectangle()
                     .fill(WeWereColors.surfaceContainerHigh)
                     .aspectRatio(photo.aspectRatio, contentMode: .fill)
-                    .overlay(
-                        ProgressView()
-                            .tint(WeWereColors.outline)
-                    )
+                    .shimmer()
 
             case .success(let image):
                 image

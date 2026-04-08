@@ -2,149 +2,138 @@ import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// Applies a Kodak Gold 200-inspired retro film filter to photos.
-/// Pipeline: warm tint → desaturate → boost contrast → vignette → grain
+/// Applies a Kodak Portra 400-inspired film filter to photos.
+///
+/// Portra 400 characteristics:
+/// - Soft, muted tones with excellent skin reproduction
+/// - Very subtle warmth (not as aggressive as Gold)
+/// - Low contrast with smooth tonal rolloff
+/// - Lifted shadows with a slight pink/peach cast
+/// - Fine grain structure
+/// - Gentle highlight rolloff (highlights don't clip harshly)
 enum RetroFilter {
 
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
-    /// Apply the full retro filter pipeline to image data. Returns filtered JPEG data.
+    /// Apply the Portra 400 filter pipeline. Returns filtered JPEG data.
     static func apply(to imageData: Data) -> Data? {
-        guard let inputImage = CIImage(data: imageData) else { return nil }
+        guard let uiImage = UIImage(data: imageData),
+              let normalizedImage = normalizeOrientation(uiImage),
+              let normalizedData = normalizedImage.jpegData(compressionQuality: 1.0),
+              let inputImage = CIImage(data: normalizedData) else { return nil }
 
         var image = inputImage
 
-        // 1. Warm color temperature (Kodak Gold warmth)
+        // 1. Subtle warmth -- Portra is warm but not orange
         image = applyWarmth(to: image)
 
-        // 2. Desaturate slightly (-15%)
-        image = adjustSaturation(image, amount: 0.85)
+        // 2. Gentle desaturation -- Portra has muted, pastel tones
+        image = adjustColorControls(image, saturation: 0.88, brightness: 0.015, contrast: 1.0)
 
-        // 3. Boost contrast (+12%)
-        image = adjustContrast(image, amount: 1.12)
+        // 3. Low contrast -- Portra is known for soft, flat contrast
+        image = adjustColorControls(image, saturation: 1.0, brightness: 0.0, contrast: 0.95)
 
-        // 4. Lift shadows / fade blacks (film look)
-        image = fadeShadows(image)
+        // 4. Lifted shadows with pink/peach cast -- signature Portra look
+        image = portraShadowLift(image)
 
-        // 5. Vignette (darken edges)
+        // 5. Soft highlight rolloff -- compress highlights gently
+        image = highlightRolloff(image)
+
+        // 6. Gentle vignette -- much softer than Kodak Gold
         image = applyVignette(to: image)
 
-        // 6. Film grain overlay
+        // 7. Fine grain -- Portra has very fine, subtle grain
         image = applyGrain(to: image)
-
-        // 7. Subtle light leak (amber glow in top-right corner)
-        image = applyLightLeak(to: image)
 
         // Render to JPEG
         guard let cgImage = context.createCGImage(image, from: inputImage.extent) else { return nil }
-        let uiImage = UIImage(cgImage: cgImage)
-        return uiImage.jpegData(compressionQuality: 0.85)
+        let outputImage = UIImage(cgImage: cgImage)
+        return outputImage.jpegData(compressionQuality: 0.85)
     }
 
     // MARK: - Pipeline Steps
 
-    /// Shift color temperature warmer (boost reds/yellows, reduce blues)
+    /// Subtle warmth -- less aggressive than Kodak Gold
     private static func applyWarmth(to image: CIImage) -> CIImage {
         let filter = CIFilter.temperatureAndTint()
         filter.inputImage = image
-        filter.neutral = CIVector(x: 5800, y: 0)   // slightly warm neutral point
-        filter.targetNeutral = CIVector(x: 4500, y: 0)  // push warmer
+        filter.neutral = CIVector(x: 6200, y: 0)
+        filter.targetNeutral = CIVector(x: 5400, y: -10) // slight warmth + tiny magenta shift
         return filter.outputImage ?? image
     }
 
-    /// Adjust saturation (1.0 = normal, <1.0 = desaturated)
-    private static func adjustSaturation(_ image: CIImage, amount: Float) -> CIImage {
+    /// General color controls adjustment
+    private static func adjustColorControls(_ image: CIImage, saturation: Float, brightness: Float, contrast: Float) -> CIImage {
         let filter = CIFilter.colorControls()
         filter.inputImage = image
-        filter.saturation = amount
-        filter.brightness = 0.02  // very slight brightness lift
-        filter.contrast = 1.0
+        filter.saturation = saturation
+        filter.brightness = brightness
+        filter.contrast = contrast
         return filter.outputImage ?? image
     }
 
-    /// Adjust contrast
-    private static func adjustContrast(_ image: CIImage, amount: Float) -> CIImage {
-        let filter = CIFilter.colorControls()
-        filter.inputImage = image
-        filter.contrast = amount
-        filter.saturation = 1.0
-        filter.brightness = 0.0
-        return filter.outputImage ?? image
-    }
-
-    /// Fade/lift the shadows to get that classic film look (blacks aren't pure black)
-    private static func fadeShadows(_ image: CIImage) -> CIImage {
-        // Use a curves-like approach: map 0 -> 0.06 (lift blacks)
+    /// Portra's signature shadow lift with a slight pink/peach cast
+    /// Blacks become a warm dark gray rather than pure black
+    private static func portraShadowLift(_ image: CIImage) -> CIImage {
         let filter = CIFilter.colorClamp()
         filter.inputImage = image
-        filter.minComponents = CIVector(x: 0.04, y: 0.03, z: 0.02, w: 0) // warm lifted blacks
-        filter.maxComponents = CIVector(x: 1, y: 0.98, z: 0.95, w: 1)    // slightly reduced highlights
+        // Lift shadows: R slightly more than G and B for peach cast
+        filter.minComponents = CIVector(x: 0.035, y: 0.025, z: 0.03, w: 0)
+        // Soft highlight ceiling -- don't clip whites harshly
+        filter.maxComponents = CIVector(x: 0.98, y: 0.97, z: 0.96, w: 1)
         return filter.outputImage ?? image
     }
 
-    /// Add edge vignette
+    /// Compress highlights gently -- Portra's smooth highlight rolloff
+    private static func highlightRolloff(_ image: CIImage) -> CIImage {
+        let filter = CIFilter.highlightShadowAdjust()
+        filter.inputImage = image
+        filter.highlightAmount = 0.85 // pull highlights down slightly
+        filter.shadowAmount = 0.15    // open shadows a touch
+        return filter.outputImage ?? image
+    }
+
+    /// Gentle vignette -- softer and less noticeable than Gold
     private static func applyVignette(to image: CIImage) -> CIImage {
         let filter = CIFilter.vignette()
         filter.inputImage = image
-        filter.intensity = 1.2
-        filter.radius = 2.0
+        filter.intensity = 0.6  // much lighter than Gold's 1.2
+        filter.radius = 2.5     // wider falloff
         return filter.outputImage ?? image
     }
 
-    /// Add subtle film grain noise
+    /// Fine film grain -- Portra 400 has subtle, fine-structured grain
     private static func applyGrain(to image: CIImage) -> CIImage {
-        // Generate noise
         let noiseFilter = CIFilter.randomGenerator()
         guard let noise = noiseFilter.outputImage else { return image }
 
-        // Scale and desaturate the noise
+        // Desaturate and darken the noise
         let whitening = CIFilter.colorControls()
         whitening.inputImage = noise
         whitening.saturation = 0
-        whitening.brightness = -0.4
-        whitening.contrast = 3.0
+        whitening.brightness = -0.5
+        whitening.contrast = 2.5  // less harsh than Gold
         guard let whiteNoise = whitening.outputImage else { return image }
 
-        // Crop noise to image size
         let croppedNoise = whiteNoise.cropped(to: image.extent)
 
-        // Blend noise with original at low opacity
-        let blend = CIFilter.sourceOverCompositing()
-        let opacity = CIFilter.colorControls()
-        opacity.inputImage = croppedNoise
-        opacity.brightness = 0
-        opacity.contrast = 1.0
-        opacity.saturation = 0
-        guard let adjustedNoise = opacity.outputImage else { return image }
-
-        // Use multiply blend at very low opacity for subtle grain
+        // Very subtle grain blend -- 4% opacity (finer than Gold's 6%)
         let multiply = CIFilter.multiplyBlendMode()
-        multiply.inputImage = adjustedNoise.applyingFilter("CIColorMatrix", parameters: [
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.06) // 6% opacity
+        multiply.inputImage = croppedNoise.applyingFilter("CIColorMatrix", parameters: [
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.04)
         ])
         multiply.backgroundImage = image
         return multiply.outputImage ?? image
     }
 
-    /// Add a subtle amber/orange light leak in the top-right corner
-    private static func applyLightLeak(to image: CIImage) -> CIImage {
-        let extent = image.extent
+    /// Normalize image orientation so pixels match the visual orientation.
+    private static func normalizeOrientation(_ image: UIImage) -> UIImage? {
+        guard image.imageOrientation != .up else { return image }
 
-        // Create a radial gradient for the light leak
-        let center = CGPoint(x: extent.width * 0.85, y: extent.height * 0.85)
-
-        let gradient = CIFilter.radialGradient()
-        gradient.center = center
-        gradient.radius0 = 0
-        gradient.radius1 = Float(min(extent.width, extent.height) * 0.5)
-        gradient.color0 = CIColor(red: 1.0, green: 0.7, blue: 0.2, alpha: 0.08) // warm amber, very subtle
-        gradient.color1 = CIColor(red: 1.0, green: 0.7, blue: 0.2, alpha: 0.0)
-        guard let leak = gradient.outputImage?.cropped(to: extent) else { return image }
-
-        // Add the light leak on top
-        let composite = CIFilter.additionCompositing()
-        composite.inputImage = leak
-        composite.backgroundImage = image
-        return composite.outputImage ?? image
+        UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        let normalized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return normalized
     }
 }

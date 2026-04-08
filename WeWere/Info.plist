@@ -10,5 +10,16 @@
 		<string>SpaceGrotesk-Medium.ttf</string>
 		<string>ClashDisplay-Semibold.otf</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.wewere.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>wewere</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

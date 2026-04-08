@@ -40,6 +40,12 @@ class CameraService: NSObject, ObservableObject {
         if currentDevice?.hasFlash == true {
             settings.flashMode = flashMode
         }
+
+        // Set correct orientation so photos aren't rotated
+        if let connection = output.connection(with: .video) {
+            connection.videoRotationAngle = 90 // Portrait orientation
+        }
+
         output.capturePhoto(with: settings, delegate: self)
     }
 
