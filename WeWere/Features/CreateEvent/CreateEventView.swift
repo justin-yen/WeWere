@@ -6,6 +6,8 @@ struct CreateEventView: View {
     @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) var dismiss
 
+    @State private var showCoverPhotoPicker = false
+
     private let hours = Array(0...23)
     private let minutes = [0, 30]
 
@@ -126,6 +128,98 @@ struct CreateEventView: View {
                         }
                     }
 
+                    // Cover photo
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("COVER PHOTO")
+                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 11))
+                            .foregroundStyle(WeWereColors.outline)
+                            .tracking(2)
+
+                        if let url = viewModel.coverPhotoUrl, let imageURL = URL(string: url) {
+                            // Selected photo preview
+                            ZStack(alignment: .topTrailing) {
+                                AsyncImage(url: imageURL) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .aspectRatio(16/9, contentMode: .fill)
+                                            .clipped()
+                                    case .empty:
+                                        Rectangle()
+                                            .fill(WeWereColors.surfaceContainerLow)
+                                            .aspectRatio(16/9, contentMode: .fit)
+                                            .overlay(ProgressView().tint(.white))
+                                    default:
+                                        Rectangle()
+                                            .fill(WeWereColors.surfaceContainerLow)
+                                            .aspectRatio(16/9, contentMode: .fit)
+                                    }
+                                }
+                                .cornerRadius(8)
+
+                                // Change / remove buttons
+                                HStack(spacing: 8) {
+                                    Button {
+                                        showCoverPhotoPicker = true
+                                    } label: {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 28, height: 28)
+                                            .background(.black.opacity(0.5))
+                                            .clipShape(Circle())
+                                    }
+
+                                    Button {
+                                        viewModel.coverPhotoUrl = nil
+                                        viewModel.coverPhotoAttribution = nil
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 28, height: 28)
+                                            .background(.black.opacity(0.5))
+                                            .clipShape(Circle())
+                                    }
+                                }
+                                .padding(8)
+                            }
+
+                            if let attribution = viewModel.coverPhotoAttribution {
+                                Text(attribution)
+                                    .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 10))
+                                    .foregroundStyle(WeWereColors.outline)
+                            }
+                        } else {
+                            // Add cover photo button
+                            Button {
+                                showCoverPhotoPicker = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "photo.on.rectangle")
+                                        .font(.system(size: 16))
+                                    Text("Add a cover photo")
+                                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 14))
+                                }
+                                .foregroundStyle(WeWereColors.onSurfaceVariant)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 80)
+                                .background(WeWereColors.surfaceContainerLow)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(
+                                            WeWereColors.surfaceContainerHigh,
+                                            style: StrokeStyle(lineWidth: 1, dash: [6, 4])
+                                        )
+                                )
+                            }
+                            .disabled(viewModel.name.trimmingCharacters(in: .whitespaces).count < 3)
+                            .opacity(viewModel.name.trimmingCharacters(in: .whitespaces).count < 3 ? 0.4 : 1.0)
+                        }
+                    }
+
                     Spacer(minLength: 32)
 
                     // Create button
@@ -135,9 +229,14 @@ struct CreateEventView: View {
                                 let event = try await viewModel.createEvent()
                                 NotificationCenter.default.post(name: .eventCreated, object: nil)
                                 dismiss()
-                                // Navigate to the new event detail after sheet dismisses
+                                // Switch to home tab with animation, then navigate to event detail
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    appState.navigationPath.append(Route.eventDetail(event.id))
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        appState.selectedTab = .home
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                        appState.navigationPath.append(Route.eventDetail(event.id))
+                                    }
                                 }
                             } catch {
                                 print("Failed to create event: \(error)")
@@ -180,6 +279,19 @@ struct CreateEventView: View {
                 }
             }
             .toolbarBackground(WeWereColors.surface, for: .navigationBar)
+            .sheet(isPresented: $showCoverPhotoPicker) {
+                CoverPhotoPickerView(
+                    eventName: viewModel.name,
+                    eventDescription: viewModel.description,
+                    onSelect: { photo in
+                        viewModel.coverPhotoUrl = photo.urlRegular
+                        viewModel.coverPhotoAttribution = "Photo by \(photo.photographer) on Unsplash"
+                    },
+                    onSkip: {}
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 

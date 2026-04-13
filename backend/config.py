@@ -22,6 +22,7 @@ class Settings:
     APP_BUNDLE_ID: str = os.getenv("APP_BUNDLE_ID", "com.wewere.app")
 
     GOOGLE_PLACES_API_KEY: str = os.getenv("GOOGLE_PLACES_API_KEY", "")
+    UNSPLASH_ACCESS_KEY: str = os.getenv("UNSPLASH_ACCESS_KEY", "")
 
 
 settings = Settings()

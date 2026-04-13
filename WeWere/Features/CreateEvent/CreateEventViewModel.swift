@@ -17,6 +17,8 @@ class CreateEventViewModel: ObservableObject {
     @Published var endHour = Calendar.current.component(.hour, from: Date().addingTimeInterval(3600 * 4))
     @Published var endMinute = 0
     @Published var isCreating = false
+    @Published var coverPhotoUrl: String?
+    @Published var coverPhotoAttribution: String?
 
     private let eventService = EventService()
 
@@ -78,7 +80,9 @@ class CreateEventViewModel: ObservableObject {
             locationLat: locationLat,
             locationLng: locationLng,
             startTime: startTime,
-            endTime: resolvedEndTime
+            endTime: resolvedEndTime,
+            coverPhotoUrl: coverPhotoUrl,
+            coverPhotoAttribution: coverPhotoAttribution
         )
     }
 }

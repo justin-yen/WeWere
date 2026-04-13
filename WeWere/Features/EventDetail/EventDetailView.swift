@@ -77,18 +77,25 @@ struct EventDetailView: View {
 
     private var heroSection: some View {
         ZStack(alignment: .bottomLeading) {
-            // Gradient placeholder for cover image
-            LinearGradient(
-                colors: [
-                    Color(hex: "1a1a2e"),
-                    Color(hex: "16213e"),
-                    Color(hex: "0f3460"),
-                    Color(hex: "0f0f0f")
-                ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
-            .frame(height: 150)
+            // Cover photo or gradient fallback
+            if let urlString = viewModel.event?.coverPhotoUrl,
+               let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 200)
+                            .clipped()
+                    default:
+                        heroGradient
+                    }
+                }
+                .frame(height: 200)
+            } else {
+                heroGradient
+            }
 
             // Bottom fade
             LinearGradient(
@@ -96,7 +103,6 @@ struct EventDetailView: View {
                 startPoint: .center,
                 endPoint: .bottom
             )
-            .frame(height: 150)
 
             // Live badge
             if viewModel.event?.isLive == true {
@@ -104,7 +110,20 @@ struct EventDetailView: View {
                     .padding(WeWereSpacing.md)
             }
         }
-        .frame(height: 150)
+        .frame(height: 200)
+    }
+
+    private var heroGradient: some View {
+        LinearGradient(
+            colors: [
+                Color(hex: "1a1a2e"),
+                Color(hex: "16213e"),
+                Color(hex: "0f3460"),
+                Color(hex: "0f0f0f")
+            ],
+            startPoint: .topTrailing,
+            endPoint: .bottomLeading
+        )
     }
 
     private var liveBadge: some View {

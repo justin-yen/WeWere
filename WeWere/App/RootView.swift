@@ -14,8 +14,11 @@ struct RootView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            TabView(selection: $appState.selectedTab) {
+        VStack(spacing: 0) {
+            WeWereHeader()
+
+            ZStack(alignment: .bottom) {
+            TabView(selection: $appState.selectedTab.animation(.easeInOut(duration: 0.3))) {
                 NavigationStack(path: $appState.navigationPath) {
                     HomeView()
                         .navigationDestination(for: Route.self) { route in
@@ -41,6 +44,7 @@ struct RootView: View {
             .toolbar(.hidden, for: .tabBar)
 
             WeWereTabBar(selectedTab: selectedTabRawValue)
+        }
         }
         .environmentObject(sharedViewModel)
         .background(Color(hex: "#131313"))

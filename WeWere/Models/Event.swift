@@ -10,7 +10,8 @@ struct Event: Codable, Identifiable, Hashable {
     var locationAddress: String?
     var locationLat: Double?
     var locationLng: Double?
-    var coverImageUrl: String?
+    var coverPhotoUrl: String?
+    var coverPhotoAttribution: String?
     let startTime: Date
     let endTime: Date
     var status: EventStatus
@@ -27,7 +28,8 @@ struct Event: Codable, Identifiable, Hashable {
         case locationAddress = "location_address"
         case locationLat = "location_lat"
         case locationLng = "location_lng"
-        case coverImageUrl = "cover_image_url"
+        case coverPhotoUrl = "cover_photo_url"
+        case coverPhotoAttribution = "cover_photo_attribution"
         case startTime = "start_time"
         case endTime = "end_time"
         case status

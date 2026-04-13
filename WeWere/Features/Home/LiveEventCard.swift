@@ -8,16 +8,26 @@ struct LiveEventCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            // Dark cinematic gradient background
-            LinearGradient(
-                colors: [
-                    Color(hex: "1a1a2e"),
-                    Color(hex: "16213e"),
-                    Color(hex: "0f0f0f")
-                ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
+            // Cover photo or gradient fallback
+            if let urlString = event.coverPhotoUrl,
+               let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        GeometryReader { geo in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                        }
+                    default:
+                        liveCardGradient
+                    }
+                }
+            } else {
+                liveCardGradient
+            }
 
             // Bottom overlay gradient for text legibility
             LinearGradient(
@@ -89,6 +99,18 @@ struct LiveEventCard: View {
         .frame(height: 280)
         .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
     }
+
+    private var liveCardGradient: some View {
+        LinearGradient(
+            colors: [
+                Color(hex: "1a1a2e"),
+                Color(hex: "16213e"),
+                Color(hex: "0f0f0f")
+            ],
+            startPoint: .topTrailing,
+            endPoint: .bottomLeading
+        )
+    }
 }
 
 #Preview {
@@ -99,7 +121,8 @@ struct LiveEventCard: View {
             name: "Saturday Night",
             description: nil,
             location: nil,
-            coverImageUrl: nil,
+            coverPhotoUrl: nil,
+            coverPhotoAttribution: nil,
             startTime: Date(),
             endTime: Date().addingTimeInterval(3600),
             status: .live,

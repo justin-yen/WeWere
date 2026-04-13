@@ -35,7 +35,8 @@ struct WeWereTabBar: View {
         }
         .padding(.top, WeWereSpacing.sm)
         .padding(.bottom, WeWereSpacing.lg)
-        .background(WeWereColors.surfaceContainerLowest)
+        .background(WeWereColors.surfaceContainerLowest.opacity(0.85))
+        .background(.ultraThinMaterial.opacity(0.5))
     }
 
     @ViewBuilder

@@ -90,18 +90,7 @@ struct PastEventsView: View {
             .padding(.top, WeWereSpacing.sm)
         }
         .background(Color(hex: "#131313").ignoresSafeArea())
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("WEWERE")
-                    .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 18))
-                    .tracking(4)
-                    .foregroundStyle(.white)
-            }
-        }
-        .toolbarBackground(Color(hex: "#131313"), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationBarHidden(true)
     }
 }
 

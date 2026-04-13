@@ -172,6 +172,10 @@ async def create_event(
         event_data["location_lng"] = body.location_lng
     if body.end_time:
         event_data["end_time"] = body.end_time.isoformat()
+    if body.cover_photo_url:
+        event_data["cover_photo_url"] = body.cover_photo_url
+    if body.cover_photo_attribution:
+        event_data["cover_photo_attribution"] = body.cover_photo_attribution
 
     result = client.table("events").insert(event_data).execute()
     if not result.data:

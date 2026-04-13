@@ -72,6 +72,8 @@ class CreateEventRequest(BaseModel):
     location_lng: Optional[float] = None
     start_time: datetime
     end_time: Optional[datetime] = None
+    cover_photo_url: Optional[str] = None
+    cover_photo_attribution: Optional[str] = None
 
 
 class EventResponse(BaseModel):
@@ -92,6 +94,8 @@ class EventResponse(BaseModel):
     photo_count: Optional[int] = None
     member_count: Optional[int] = None
     membership: Optional[dict[str, Any]] = None
+    cover_photo_url: Optional[str] = None
+    cover_photo_attribution: Optional[str] = None
 
 
 class EventDetailResponse(EventResponse):

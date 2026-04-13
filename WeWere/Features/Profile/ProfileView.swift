@@ -25,14 +25,7 @@ struct ProfileView: View {
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-                .frame(height: 48)
-
-            // Header
-            Text("PROFILE")
-                .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 24))
-                .foregroundStyle(.white)
-                .tracking(2)
-                .padding(.bottom, 32)
+                .frame(height: 24)
 
             // Avatar placeholder
             Circle()

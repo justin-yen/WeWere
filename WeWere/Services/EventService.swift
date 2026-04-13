@@ -14,6 +14,8 @@ struct CreateEventRequest: Encodable {
     let locationLng: Double?
     let startTime: Date
     let endTime: Date
+    let coverPhotoUrl: String?
+    let coverPhotoAttribution: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -25,6 +27,8 @@ struct CreateEventRequest: Encodable {
         case locationLng = "location_lng"
         case startTime = "start_time"
         case endTime = "end_time"
+        case coverPhotoUrl = "cover_photo_url"
+        case coverPhotoAttribution = "cover_photo_attribution"
     }
 }
 
@@ -39,7 +43,8 @@ struct EventWithCounts: Decodable, Identifiable {
     var locationAddress: String?
     var locationLat: Double?
     var locationLng: Double?
-    var coverImageUrl: String?
+    var coverPhotoUrl: String?
+    var coverPhotoAttribution: String?
     let startTime: Date
     let endTime: Date
     var status: Event.EventStatus
@@ -59,7 +64,8 @@ struct EventWithCounts: Decodable, Identifiable {
         case locationAddress = "location_address"
         case locationLat = "location_lat"
         case locationLng = "location_lng"
-        case coverImageUrl = "cover_image_url"
+        case coverPhotoUrl = "cover_photo_url"
+        case coverPhotoAttribution = "cover_photo_attribution"
         case startTime = "start_time"
         case endTime = "end_time"
         case status
@@ -81,7 +87,8 @@ struct EventWithCounts: Decodable, Identifiable {
             locationAddress: locationAddress,
             locationLat: locationLat,
             locationLng: locationLng,
-            coverImageUrl: coverImageUrl,
+            coverPhotoUrl: coverPhotoUrl,
+            coverPhotoAttribution: coverPhotoAttribution,
             startTime: startTime,
             endTime: endTime,
             status: status,
@@ -160,7 +167,9 @@ final class EventService: ObservableObject {
         locationLat: Double?,
         locationLng: Double?,
         startTime: Date,
-        endTime: Date
+        endTime: Date,
+        coverPhotoUrl: String? = nil,
+        coverPhotoAttribution: String? = nil
     ) async throws -> Event {
         let request = CreateEventRequest(
             name: name,
@@ -171,7 +180,9 @@ final class EventService: ObservableObject {
             locationLat: locationLat,
             locationLng: locationLng,
             startTime: startTime,
-            endTime: endTime
+            endTime: endTime,
+            coverPhotoUrl: coverPhotoUrl,
+            coverPhotoAttribution: coverPhotoAttribution
         )
 
         let event: Event = try await api.post("/events", body: request)

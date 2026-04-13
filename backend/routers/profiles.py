@@ -60,6 +60,46 @@ async def update_my_profile(
     return ProfileResponse(**result.data[0])
 
 
+@router.get("/me/stats")
+async def get_my_stats(user_id: str = Depends(get_current_user)):
+    """Get the current user's event and photo counts."""
+    client = get_client()
+
+    # Resolve auth_id to internal user id
+    user_result = (
+        client.table("users")
+        .select("id")
+        .eq("auth_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not user_result or not user_result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+    internal_id = user_result.data["id"]
+
+    events_result = (
+        client.table("event_members")
+        .select("id", count="exact")
+        .eq("user_id", internal_id)
+        .execute()
+    )
+
+    photos_result = (
+        client.table("photos")
+        .select("id", count="exact")
+        .eq("user_id", internal_id)
+        .execute()
+    )
+
+    return {
+        "events_attended": events_result.count or 0,
+        "photos_taken": photos_result.count or 0,
+    }
+
+
 @router.post("/me/avatar", response_model=ProfileResponse)
 async def upload_avatar_endpoint(
     file: UploadFile = File(...),

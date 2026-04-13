@@ -9,9 +9,6 @@ struct HomeView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
-                // MARK: - Header Bar
-                headerBar
-
                 // MARK: - Live Events
                 if !viewModel.liveEvents.isEmpty {
                     liveEventsSection
@@ -50,30 +47,6 @@ struct HomeView: View {
             await viewModel.loadEvents()
             await photoStackViewModel.loadPhotos(developedEvents: viewModel.developedEvents)
         }
-    }
-
-    // MARK: - Header Bar
-
-    private var headerBar: some View {
-        ZStack {
-            Text("WEWERE")
-                .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 18))
-                .tracking(4)
-                .foregroundStyle(.white)
-
-            HStack {
-                Spacer()
-
-                Button {
-                    // Notifications action
-                } label: {
-                    Image(systemName: "bell.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(WeWereColors.onSurfaceVariant)
-                }
-            }
-        }
-        .padding(.vertical, WeWereSpacing.xs)
     }
 
     // MARK: - Live Events Section
