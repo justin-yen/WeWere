@@ -40,6 +40,18 @@ struct CreateEventView: View {
                         .frame(height: 48)
                         .background(Color(hex: "191919"))
                         .cornerRadius(8)
+                        .onChange(of: viewModel.name) { _, newValue in
+                            if newValue.count > 40 {
+                                viewModel.name = String(newValue.prefix(40))
+                            }
+                        }
+
+                        HStack {
+                            Spacer()
+                            Text("\(viewModel.name.count)/40")
+                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 11))
+                                .foregroundStyle(viewModel.name.count >= 36 ? WeWereColors.error : WeWereColors.outline)
+                        }
                     }
 
                     // Description

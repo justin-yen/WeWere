@@ -92,6 +92,8 @@ class EventDetailViewModel: ObservableObject {
         do {
             try await eventService.endEvent(id: eventId)
             event?.status = .ended
+            eventWasEnded = true
+            NotificationCenter.default.post(name: .eventUpdated, object: nil)
         } catch {
             print("Failed to end event: \(error)")
         }

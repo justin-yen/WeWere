@@ -63,7 +63,7 @@ class ProfileResponse(BaseModel):
 # ---------- Events ----------
 
 class CreateEventRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
+    name: str = Field(..., min_length=1, max_length=40)
     description: Optional[str] = None
     location: Optional[str] = None
     location_name: Optional[str] = None

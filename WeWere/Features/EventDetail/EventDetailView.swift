@@ -24,19 +24,6 @@ struct EventDetailView: View {
                         // MARK: - Hero Area
                         heroSection
 
-                        // MARK: - Event Info
-                        eventInfoSection
-
-                        // MARK: - Open Camera (Live Only)
-                        if viewModel.event?.isLive == true {
-                            cameraButton
-                        }
-
-                        // MARK: - End Event (Host Only)
-                        if viewModel.isHost && viewModel.event?.isLive == true {
-                            endEventButton
-                        }
-
                         // MARK: - Share Link
                         if let url = viewModel.event?.shareURL {
                             shareLinkSection(url: url)
@@ -47,6 +34,11 @@ struct EventDetailView: View {
 
                         // MARK: - Location
                         locationSection
+
+                        // MARK: - End Event (Host Only)
+                        if viewModel.isHost && viewModel.event?.isLive == true {
+                            endEventButton
+                        }
 
                         Spacer(minLength: WeWereSpacing.xxxl)
                     }
@@ -76,7 +68,7 @@ struct EventDetailView: View {
     // MARK: - Hero Section
 
     private var heroSection: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottom) {
             // Cover photo or gradient fallback
             if let urlString = viewModel.event?.coverPhotoUrl,
                let url = URL(string: urlString) {
@@ -86,13 +78,13 @@ struct EventDetailView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(height: 200)
+                            .frame(height: 240)
                             .clipped()
                     default:
                         heroGradient
                     }
                 }
-                .frame(height: 200)
+                .frame(height: 240)
             } else {
                 heroGradient
             }
@@ -104,13 +96,62 @@ struct EventDetailView: View {
                 endPoint: .bottom
             )
 
-            // Live badge
-            if viewModel.event?.isLive == true {
-                liveBadge
-                    .padding(WeWereSpacing.md)
+            // Overlay content: title + camera button
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: WeWereSpacing.xxs) {
+                    // Live badge
+                    if viewModel.event?.isLive == true {
+                        liveBadge
+                    }
+
+                    if let event = viewModel.event {
+                        Text(event.name)
+                            .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                    }
+
+                    // Photo count
+                    HStack(spacing: WeWereSpacing.xxs) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 13))
+                        Text("\(viewModel.photoCount)")
+                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 16))
+                    }
+                    .foregroundStyle(WeWereColors.onSurfaceVariant)
+                }
+
+                Spacer()
+
+                if viewModel.event?.isLive == true {
+                    Button {
+                        appState.presentedSheet = .camera(viewModel.eventId)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 13))
+                            Text("Open Camera")
+                                .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                        }
+                        .foregroundStyle(Color(hex: "1a1c1c"))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            LinearGradient(
+                                colors: [.white, Color(hex: "d4d4d4")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.lg))
+                    }
+                }
             }
+            .padding(.horizontal, WeWereSpacing.md)
+            .padding(.bottom, WeWereSpacing.md)
         }
-        .frame(height: 200)
+        .frame(height: 240)
     }
 
     private var heroGradient: some View {
@@ -141,41 +182,6 @@ struct EventDetailView: View {
         .padding(.vertical, WeWereSpacing.xxs + 2)
         .background(Color.white.opacity(0.12))
         .clipShape(Capsule())
-    }
-
-    // MARK: - Event Info Section
-
-    private var eventInfoSection: some View {
-        VStack(alignment: .leading, spacing: WeWereSpacing.md) {
-            if let event = viewModel.event {
-                Text(event.name)
-                    .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 32))
-                    .foregroundStyle(.white)
-
-                // Photo count
-                HStack(spacing: WeWereSpacing.xs) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 16))
-                    Text("\(viewModel.photoCount)")
-                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 24))
-                }
-                .foregroundStyle(WeWereColors.onSurface)
-            }
-        }
-        .padding(.horizontal, WeWereSpacing.md)
-    }
-
-    // MARK: - Camera Button
-
-    private var cameraButton: some View {
-        HStack {
-            Spacer()
-            BrushedChromeButton(title: "Open Camera", icon: "camera") {
-                appState.presentedSheet = .camera(viewModel.eventId)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, WeWereSpacing.md)
     }
 
     // MARK: - End Event Button

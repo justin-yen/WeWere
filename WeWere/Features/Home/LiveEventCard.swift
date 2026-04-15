@@ -44,6 +44,7 @@ struct LiveEventCard: View {
                     .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
                     .foregroundStyle(.white)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.7)
 
                 HStack(spacing: WeWereSpacing.md) {
                     HStack(spacing: WeWereSpacing.xxs) {
