@@ -15,6 +15,7 @@ enum Route: Hashable {
     case photoDetail(UUID, URL?, UUID?) // photoId, signedURL, eventId
     case joinEvent(shareCode: String)
     case createEvent
+    case attendees(UUID)
 }
 
 extension Notification.Name {
@@ -25,7 +26,32 @@ extension Notification.Name {
 @MainActor
 class AppState: ObservableObject {
     @Published var selectedTab: Tab = .home
-    @Published var navigationPath = NavigationPath()
+    @Published var navigationPath = NavigationPath()       // Home tab
+    @Published var eventsNavPath = NavigationPath()        // Events tab
+    @Published var profileNavPath = NavigationPath()       // Profile tab
     @Published var presentedSheet: Route?
     @Published var pendingDeepLink: Route?
+
+    /// Navigation path for the currently active tab.
+    var activeNavPath: NavigationPath {
+        switch selectedTab {
+        case .home: return navigationPath
+        case .events: return eventsNavPath
+        case .profile: return profileNavPath
+        }
+    }
+
+    /// Whether the current tab can go back.
+    var canGoBack: Bool {
+        !activeNavPath.isEmpty
+    }
+
+    /// Pop the current tab's navigation stack.
+    func goBack() {
+        switch selectedTab {
+        case .home: if !navigationPath.isEmpty { navigationPath.removeLast() }
+        case .events: if !eventsNavPath.isEmpty { eventsNavPath.removeLast() }
+        case .profile: if !profileNavPath.isEmpty { profileNavPath.removeLast() }
+        }
+    }
 }

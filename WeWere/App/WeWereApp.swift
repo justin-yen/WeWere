@@ -8,20 +8,24 @@ struct WeWereApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if authService.isInitializing {
-                    // Splash / loading
-                    ZStack {
-                        WeWereColors.surface.ignoresSafeArea()
-                        Text("WEWERE")
-                            .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
-                            .tracking(4)
-                            .foregroundStyle(WeWereColors.onSurface)
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                Group {
+                    if authService.isInitializing {
+                        // Splash / loading
+                        ZStack {
+                            WeWereColors.surface.ignoresSafeArea()
+                            Text("WEWERE")
+                                .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
+                                .tracking(4)
+                                .foregroundStyle(WeWereColors.onSurface)
+                        }
+                    } else if authService.isAuthenticated {
+                        RootView()
+                    } else {
+                        AuthFlowView()
                     }
-                } else if authService.isAuthenticated {
-                    RootView()
-                } else {
-                    AuthFlowView()
                 }
             }
             .environmentObject(appState)

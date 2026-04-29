@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from routers import auth, events, feed, photos, places, profiles, push, reactions, unsplash
+from routers import auth, events, feed, photos, places, profiles, push, reactions, test_data, unsplash
 
 app = FastAPI(
     title="WeWere API",
@@ -30,6 +30,7 @@ app.include_router(places.router)
 app.include_router(reactions.router)
 app.include_router(feed.router)
 app.include_router(unsplash.router)
+app.include_router(test_data.router)
 
 
 @app.get("/", tags=["health"])

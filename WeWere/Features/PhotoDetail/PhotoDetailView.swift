@@ -6,6 +6,9 @@ struct PhotoDetailView: View {
     let signedURL: URL?
     @State private var commentText: String = ""
     @State private var saveState: SaveState = .idle
+    @State private var selectedFilter: FilterStyle = .portra
+    @State private var filteredDisplayImage: UIImage?
+    @State private var isApplyingFilter = false
 
     enum SaveState {
         case idle, saving, saved, failed
@@ -20,13 +23,43 @@ struct PhotoDetailView: View {
         VStack(spacing: 0) {
             // MARK: - Top metadata bar
             HStack(alignment: .top) {
-                Button {
-                    dismiss()
+                // Filter picker
+                Menu {
+                    ForEach(FilterStyle.allCases) { style in
+                        Button {
+                            Task { await applyFilter(style) }
+                        } label: {
+                            Label {
+                                Text(style.rawValue)
+                            } icon: {
+                                if selectedFilter == style {
+                                    Image(systemName: "checkmark")
+                                } else {
+                                    Image(systemName: style.icon)
+                                }
+                            }
+                        }
+                    }
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
+                    HStack(spacing: 4) {
+                        if isApplyingFilter {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "camera.filters")
+                                .font(.system(size: 14))
+                        }
+                        Text(selectedFilter.rawValue)
+                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 11))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WeWereRadius.lg)
+                            .stroke(.white.opacity(0.4), lineWidth: 1)
+                    )
                 }
 
                 Spacer()
@@ -69,7 +102,12 @@ struct PhotoDetailView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // MARK: - Photo
-                    if let url = signedURL {
+                    if let displayImage = filteredDisplayImage {
+                        Image(uiImage: displayImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                    } else if let url = signedURL {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .success(let image):
@@ -165,12 +203,51 @@ struct PhotoDetailView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarHidden(true)
+        .enableSwipeBack()
         .task {
             viewModel.signedURL = signedURL
             await viewModel.load()
+        }
+    }
+
+    // MARK: - Filter
+
+    private func applyFilter(_ style: FilterStyle) async {
+        guard style != selectedFilter else { return }
+        selectedFilter = style
+
+        // Portra is the server default — use signed URL
+        if style == .portra {
+            filteredDisplayImage = nil
+            return
+        }
+
+        isApplyingFilter = true
+        defer { isApplyingFilter = false }
+
+        // Download the image data from signed URL
+        guard let url = signedURL else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+
+            if style == .none {
+                // For "Original", try to get the unfiltered version from storage
+                if let photo = viewModel.photo {
+                    let photoService = PhotoService()
+                    if let originalData = try? await photoService.downloadPhotoData(photo: photo),
+                       let img = UIImage(data: originalData) {
+                        filteredDisplayImage = img
+                        return
+                    }
+                }
+                // Fallback: just show what we have
+                filteredDisplayImage = UIImage(data: data)
+            } else {
+                filteredDisplayImage = RetroFilter.apply(style: style, to: data)
+            }
+        } catch {
+            print("Failed to apply filter: \(error)")
         }
     }
 

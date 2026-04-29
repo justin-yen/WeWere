@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct WeWereHeader: View {
+    @EnvironmentObject var appState: AppState
+
     var body: some View {
         ZStack {
             Text("WEWERE")
@@ -9,6 +11,16 @@ struct WeWereHeader: View {
                 .foregroundStyle(.white)
 
             HStack {
+                if appState.canGoBack {
+                    Button {
+                        appState.goBack()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                }
+
                 Spacer()
 
                 Button {

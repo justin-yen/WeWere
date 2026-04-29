@@ -15,12 +15,38 @@ struct CreateEventView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Title
-                    Text("CREATE EVENT")
-                        .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 24))
-                        .foregroundStyle(.white)
-                        .tracking(2)
-                        .padding(.top, 16)
+                    // Title + test button
+                    HStack {
+                        Text("CREATE EVENT")
+                            .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 24))
+                            .foregroundStyle(.white)
+                            .tracking(2)
+
+                        Spacer()
+
+                        #if DEBUG
+                        Button {
+                            viewModel.fillTestEventData()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "flask.fill")
+                                    .font(.system(size: 11))
+                                Text("TEST")
+                                    .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
+                                    .tracking(1.5)
+                            }
+                            .foregroundStyle(WeWereColors.onSurfaceVariant)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(WeWereColors.outlineVariant, lineWidth: 1)
+                            )
+                        }
+                        .disabled(viewModel.isCreating)
+                        #endif
+                    }
+                    .padding(.top, 16)
 
                     // Event name
                     VStack(alignment: .leading, spacing: 8) {
@@ -239,6 +265,9 @@ struct CreateEventView: View {
                         Task {
                             do {
                                 let event = try await viewModel.createEvent()
+                                if viewModel.shouldPopulateTestAttendees {
+                                    await viewModel.populateTestAttendees(eventId: event.id)
+                                }
                                 NotificationCenter.default.post(name: .eventCreated, object: nil)
                                 dismiss()
                                 // Switch to home tab with animation, then navigate to event detail

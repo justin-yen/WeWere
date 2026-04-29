@@ -85,4 +85,43 @@ class CreateEventViewModel: ObservableObject {
             coverPhotoAttribution: coverPhotoAttribution
         )
     }
+
+    /// Marks that the next createEvent() should also populate 50 fake attendees.
+    var shouldPopulateTestAttendees = false
+
+    /// Fill the form with random test data. User still has to tap Create Event.
+    func fillTestEventData() {
+        let payload = TestEventData.random()
+
+        name = payload.name
+        description = payload.description
+        location = payload.locationName
+        locationName = payload.locationName
+        locationAddress = payload.locationAddress
+        locationLat = payload.locationLat
+        locationLng = payload.locationLng
+        startDate = payload.startTime
+        startHour = Calendar.current.component(.hour, from: payload.startTime)
+        startMinute = 0
+        hasEndTime = false
+        coverPhotoUrl = payload.coverPhotoUrl
+        coverPhotoAttribution = "Photo from Unsplash"
+
+        shouldPopulateTestAttendees = true
+    }
+
+    /// Populate 50 fake attendees for the given event via the backend.
+    func populateTestAttendees(eventId: UUID) async {
+        struct PopulateResponse: Decodable { let count: Int }
+        do {
+            let _: PopulateResponse = try await APIClient.shared.post(
+                "/test/events/\(eventId.uuidString)/populate-attendees?count=50",
+                body: EmptyBody()
+            )
+        } catch {
+            print("Failed to populate test attendees: \(error)")
+        }
+    }
 }
+
+private struct EmptyBody: Encodable {}

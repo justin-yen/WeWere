@@ -30,13 +30,6 @@ struct DevelopFilmView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // MARK: - Wordmark
-                    Text("WEWERE")
-                        .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 16))
-                        .tracking(3)
-                        .foregroundStyle(WeWereColors.onSurface)
-                        .padding(.top, WeWereSpacing.lg)
-
                     // MARK: - Archive label
                     Text("ARCHIVE SERIES // 004")
                         .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 10))
@@ -109,13 +102,6 @@ struct DevelopFilmView: View {
                     .padding(.horizontal, WeWereSpacing.lg)
                     .padding(.top, WeWereSpacing.xl)
 
-                    // MARK: - Chemical process note
-                    Text("CHEMICAL PROCESS WILL TAKE APPROXIMATELY 24 HOURS.")
-                        .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 10))
-                        .foregroundStyle(WeWereColors.outline)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, WeWereSpacing.sm)
-
                     // MARK: - Footer metadata
                     HStack(alignment: .top, spacing: WeWereSpacing.md) {
                         // Location column
@@ -163,11 +149,8 @@ struct DevelopFilmView: View {
                 }
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(WeWereColors.surface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .tint(.white)
+        .navigationBarHidden(true)
+        .enableSwipeBack()
         .task {
             await viewModel.load()
         }

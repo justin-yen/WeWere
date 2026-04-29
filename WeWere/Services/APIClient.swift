@@ -98,6 +98,7 @@ class APIClient {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
+        urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         if requiresAuth, let token = accessToken {

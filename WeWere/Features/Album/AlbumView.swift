@@ -46,32 +46,6 @@ struct AlbumView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // MARK: - Header
-                    ZStack {
-                        Text("WEWERE")
-                            .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 16))
-                            .tracking(3)
-                            .foregroundStyle(WeWereColors.onSurface)
-
-                        HStack {
-                            Button {
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .semibold))
-                                    Text("Back")
-                                        .font(.custom(WeWereFontFamily.jakartaRegular, size: 16))
-                                }
-                                .foregroundStyle(WeWereColors.onSurface)
-                            }
-
-                            Spacer()
-                        }
-                    }
-                    .padding(.horizontal, WeWereSpacing.md)
-                    .padding(.top, WeWereSpacing.md)
-
                     // MARK: - Event title (from shared cache = instant)
                     Text(eventName)
                         .font(.custom(WeWereFontFamily.clashDisplaySemibold, size: 28))
@@ -104,49 +78,98 @@ struct AlbumView: View {
                     .padding(.horizontal, WeWereSpacing.md)
                     .padding(.top, WeWereSpacing.xxs)
 
-                    // MARK: - Download All
+                    // MARK: - Filter Picker + Download All
                     if displayPhotoCount > 0 {
-                        Button {
-                            downloadAllPhotos()
-                        } label: {
-                            HStack(spacing: 6) {
-                                switch downloadState {
-                                case .idle:
-                                    Image(systemName: "arrow.down.circle")
-                                        .font(.system(size: 12))
-                                    Text("DOWNLOAD ALL")
-                                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
-                                case .downloading:
-                                    ProgressView()
-                                        .tint(WeWereColors.onSurfaceVariant)
-                                        .scaleEffect(0.7)
-                                    Text("SAVING \(downloadProgress)/\(viewModel.photos.count)")
-                                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
-                                case .done:
-                                    Image(systemName: "checkmark.circle")
-                                        .font(.system(size: 12))
-                                    Text("ALL SAVED")
-                                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
-                                case .failed:
-                                    Image(systemName: "exclamationmark.circle")
-                                        .font(.system(size: 12))
-                                    Text("RETRY DOWNLOAD")
-                                        .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                        HStack(spacing: WeWereSpacing.xs) {
+                            // Filter picker
+                            Menu {
+                                ForEach(FilterStyle.allCases) { style in
+                                    Button {
+                                        Task { await viewModel.applyFilter(style) }
+                                    } label: {
+                                        Label {
+                                            VStack(alignment: .leading) {
+                                                Text(style.rawValue)
+                                                Text(style.description)
+                                                    .font(.caption2)
+                                            }
+                                        } icon: {
+                                            if viewModel.selectedFilter == style {
+                                                Image(systemName: "checkmark")
+                                            } else {
+                                                Image(systemName: style.icon)
+                                            }
+                                        }
+                                    }
                                 }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if viewModel.isApplyingFilter {
+                                        ProgressView()
+                                            .tint(WeWereColors.onSurfaceVariant)
+                                            .scaleEffect(0.7)
+                                        Text("\(viewModel.filterProgress)/\(viewModel.photos.count)")
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    } else {
+                                        Image(systemName: "camera.filters")
+                                            .font(.system(size: 12))
+                                        Text(viewModel.selectedFilter.rawValue.uppercased())
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    }
+                                }
+                                .foregroundStyle(WeWereColors.onSurfaceVariant)
+                                .padding(.horizontal, WeWereSpacing.sm)
+                                .padding(.vertical, WeWereSpacing.xs)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: WeWereRadius.lg)
+                                        .strokeBorder(WeWereColors.outlineVariant, lineWidth: 1)
+                                )
                             }
-                            .foregroundStyle(downloadState == .done ? .green : WeWereColors.onSurfaceVariant)
-                            .padding(.horizontal, WeWereSpacing.sm)
-                            .padding(.vertical, WeWereSpacing.xs)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: WeWereRadius.lg)
-                                    .strokeBorder(
-                                        downloadState == .done ? .green.opacity(0.5) : WeWereColors.outlineVariant,
-                                        lineWidth: 1
-                                    )
-                            )
+
+                            // Download All
+                            Button {
+                                downloadAllPhotos()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    switch downloadState {
+                                    case .idle:
+                                        Image(systemName: "arrow.down.circle")
+                                            .font(.system(size: 12))
+                                        Text("DOWNLOAD ALL")
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    case .downloading:
+                                        ProgressView()
+                                            .tint(WeWereColors.onSurfaceVariant)
+                                            .scaleEffect(0.7)
+                                        Text("SAVING \(downloadProgress)/\(viewModel.photos.count)")
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    case .done:
+                                        Image(systemName: "checkmark.circle")
+                                            .font(.system(size: 12))
+                                        Text("ALL SAVED")
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    case .failed:
+                                        Image(systemName: "exclamationmark.circle")
+                                            .font(.system(size: 12))
+                                        Text("RETRY")
+                                            .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
+                                    }
+                                }
+                                .foregroundStyle(downloadState == .done ? .green : WeWereColors.onSurfaceVariant)
+                                .padding(.horizontal, WeWereSpacing.sm)
+                                .padding(.vertical, WeWereSpacing.xs)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: WeWereRadius.lg)
+                                        .strokeBorder(
+                                            downloadState == .done ? .green.opacity(0.5) : WeWereColors.outlineVariant,
+                                            lineWidth: 1
+                                        )
+                                )
+                            }
+                            .disabled(downloadState == .downloading)
+
+                            Spacer()
                         }
-                        .disabled(downloadState == .downloading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, WeWereSpacing.md)
                         .padding(.top, WeWereSpacing.xs)
                     }
@@ -178,7 +201,8 @@ struct AlbumView: View {
                                 NavigationLink(value: Route.photoDetail(photo.id, viewModel.photoURL(for: photo), eventId)) {
                                     PhotoGridItem(
                                         photo: photo,
-                                        imageURL: viewModel.photoURL(for: photo)
+                                        imageURL: viewModel.isUsingServerFilter ? viewModel.photoURL(for: photo) : nil,
+                                        filteredImage: viewModel.filteredImage(for: photo)
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -195,6 +219,7 @@ struct AlbumView: View {
             }
         }
         .navigationBarHidden(true)
+        .enableSwipeBack()
         .task {
             await viewModel.load()
         }
@@ -214,14 +239,23 @@ struct AlbumView: View {
         Task {
             var succeeded = 0
             for photo in viewModel.photos {
-                guard let url = viewModel.photoURL(for: photo) else { continue }
                 do {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    guard let image = UIImage(data: data) else { continue }
+                    // Use the filtered image if available, otherwise download from URL
+                    let image: UIImage?
+                    if let filtered = viewModel.filteredImage(for: photo) {
+                        image = filtered
+                    } else if let url = viewModel.photoURL(for: photo) {
+                        let (data, _) = try await URLSession.shared.data(from: url)
+                        image = UIImage(data: data)
+                    } else {
+                        continue
+                    }
+
+                    guard let saveImage = image else { continue }
 
                     try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                         PHPhotoLibrary.shared().performChanges {
-                            PHAssetChangeRequest.creationRequestForAsset(from: image)
+                            PHAssetChangeRequest.creationRequestForAsset(from: saveImage)
                         } completionHandler: { success, error in
                             if let error { cont.resume(throwing: error) }
                             else { cont.resume() }

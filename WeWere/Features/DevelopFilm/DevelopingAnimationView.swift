@@ -172,14 +172,10 @@ struct DevelopingAnimationView: View {
                 .padding(.bottom, WeWereSpacing.xxl)
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(WeWereColors.surface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .tint(.white)
-        .navigationBarBackButtonHidden(false)
+        .navigationBarHidden(true)
         .onAppear {
             startAnimations()
+            prefetchAlbum()
         }
     }
 
@@ -191,8 +187,8 @@ struct DevelopingAnimationView: View {
             polaroidOffset = 0
         }
 
-        // Photo blur reveal over 3 seconds
-        withAnimation(.easeOut(duration: 3.0)) {
+        // Photo blur reveal over the full duration
+        withAnimation(.easeOut(duration: 7.0)) {
             photoBlur = 0
         }
 
@@ -204,14 +200,59 @@ struct DevelopingAnimationView: View {
             developingOpacity = 1.0
         }
 
-        // Auto-navigate after 4 seconds: clear stack and go straight to album
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+        // Auto-navigate after 8 seconds: clear stack and go straight to album
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
             guard !hasNavigated else { return }
             hasNavigated = true
             // Pop back to root, then push album so back goes to Home
             appState.navigationPath = NavigationPath()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 appState.navigationPath.append(Route.album(eventId))
+            }
+        }
+    }
+
+    // MARK: - Prefetching
+
+    /// Warm the album cache during the developing animation so photos appear instantly.
+    private func prefetchAlbum() {
+        Task.detached(priority: .userInitiated) {
+            let photoService = await PhotoService()
+            do {
+                let photoResponses = try await photoService.fetchPhotos(eventId: eventId)
+                let photos = photoResponses.map { $0.toPhoto }
+
+                // Build the URL map
+                var urls: [UUID: URL] = [:]
+                for pr in photoResponses {
+                    if let signedUrlString = pr.signedUrl,
+                       let url = URL(string: signedUrlString) {
+                        urls[pr.id] = url
+                    } else {
+                        let photo = pr.toPhoto
+                        if let url = await photoService.getFilteredPhotoURL(photo: photo) {
+                            urls[photo.id] = url
+                        }
+                    }
+                }
+
+                // Populate AlbumViewModel static cache so the album renders instantly
+                await MainActor.run {
+                    AlbumViewModel.cachedPhotos[eventId] = photos
+                    AlbumViewModel.cachedURLs[eventId] = urls
+                }
+
+                // Warm URLSession's disk cache by fetching the image bytes.
+                // This makes AsyncImage hit the cache instead of going to the network.
+                await withTaskGroup(of: Void.self) { group in
+                    for url in urls.values {
+                        group.addTask {
+                            _ = try? await URLSession.shared.data(from: url)
+                        }
+                    }
+                }
+            } catch {
+                print("Prefetch failed: \(error)")
             }
         }
     }

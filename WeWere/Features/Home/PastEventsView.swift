@@ -11,34 +11,9 @@ struct PastEventsView: View {
     ]
 
     var body: some View {
+        ZStack(alignment: .bottom) {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: WeWereSpacing.lg) {
-                // Create New Event button
-                Button {
-                    appState.presentedSheet = .createEvent
-                } label: {
-                    Text("CREATE NEW EVENT")
-                        .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
-                        .italic()
-                        .tracking(1.5)
-                        .frame(maxWidth: .infinity)
-                        .foregroundStyle(Color(hex: "a0a0a0"))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "2a2a2a"), Color(hex: "1a1a1a")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(WeWereColors.outlineVariant.opacity(0.3), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
                 // Past Events header with count
                 HStack {
                     Text("PAST EVENTS")
@@ -89,8 +64,113 @@ struct PastEventsView: View {
             .padding(.horizontal, WeWereSpacing.md)
             .padding(.top, WeWereSpacing.sm)
         }
+            // FAB: Create Event
+            ChromeCreateButton {
+                appState.presentedSheet = .createEvent
+            }
+            .padding(.bottom, 110)
+        }
         .background(Color(hex: "#131313").ignoresSafeArea())
         .navigationBarHidden(true)
+    }
+}
+
+// MARK: - Chrome Create Button
+
+struct ChromeCreateButton: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            TimelineView(.animation) { timeline in
+                let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3.0) / 3.0
+
+                HStack(spacing: 8) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 14))
+                    Text("Create Event")
+                        .font(.custom(WeWereFontFamily.jakartaBold, size: 14))
+                }
+                .foregroundStyle(Color(hex: "1a1c1c"))
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(
+                    ZStack {
+                        // Chrome base
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(hex: "e8e8e8"),
+                                        Color(hex: "c0c0c0"),
+                                        Color(hex: "d8d8d8"),
+                                        Color(hex: "a8a8a8"),
+                                        Color(hex: "d0d0d0"),
+                                        Color(hex: "e0e0e0"),
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+
+                        // Animated wavy shine — diagonal sweep
+                        ChromeShineCanvas(phase: phase)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .allowsHitTesting(false)
+
+                        // Top specular highlight
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.4), .clear],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                            .padding(.horizontal, 1)
+                            .padding(.top, 1)
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(color: .white.opacity(0.12), radius: 4, y: -1)
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 6)
+            }
+        }
+    }
+}
+
+// MARK: - Chrome Shine Canvas
+
+private struct ChromeShineCanvas: View {
+    let phase: Double
+
+    var body: some View {
+        Canvas { context, size in
+            let step: CGFloat = 3
+            let w = size.width
+            let h = size.height
+            let twoPi = Double.pi * 2.0
+            let phaseShift = phase * 2.0
+
+            var y: CGFloat = 0
+            while y <= h {
+                let ny = Double(y / h)
+                var x: CGFloat = 0
+                while x <= w {
+                    let nx = Double(x / w)
+                    let diagonal = (nx + ny) * 3.0 - phaseShift
+                    let wave = sin(diagonal * twoPi)
+                    let ripple = sin((nx * 5.0 + ny * 2.0 - phase * 3.0) * Double.pi)
+                    let combined = wave * 0.6 + ripple * 0.4
+                    let alpha = max(0.0, combined) * 0.3
+                    if alpha > 0.01 {
+                        let rect = CGRect(x: x, y: y, width: step, height: step)
+                        context.fill(Path(rect), with: .color(.white.opacity(alpha)))
+                    }
+                    x += step
+                }
+                y += step
+            }
+        }
     }
 }
 

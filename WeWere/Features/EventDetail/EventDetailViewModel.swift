@@ -18,19 +18,36 @@ class EventDetailViewModel: ObservableObject {
     private let photoService = PhotoService()
     weak var authService: AuthService?
 
+    // MARK: - Static cache (survives view rebuilds and navigation)
+
+    private static var cachedEvents: [UUID: Event] = [:]
+    private static var cachedMembers: [UUID: [(EventMember, AppUser)]] = [:]
+    private static var cachedPhotoCounts: [UUID: Int] = [:]
+
     init(eventId: UUID) {
         self.eventId = eventId
+
+        // Restore from cache immediately so the view renders without a spinner
+        if let cachedEvent = Self.cachedEvents[eventId] {
+            self.event = cachedEvent
+            self.members = Self.cachedMembers[eventId] ?? []
+            self.photoCount = Self.cachedPhotoCounts[eventId] ?? 0
+            self.isLoading = false
+        }
     }
 
     func load() async {
-        isLoading = true
+        // If we have cached data, revalidate in the background without a spinner
+        let hasCached = event != nil
+        if !hasCached {
+            isLoading = true
+        }
 
         // Fetch everything concurrently
         async let eventFetch = eventService.fetchEvent(byId: eventId)
         async let membersFetch = eventService.fetchMembers(eventId: eventId)
         async let countFetch = photoService.getPhotoCount(eventId: eventId)
 
-        // Collect results
         var fetchedEvent: Event?
         var fetchedMembers: [MemberWithUser] = []
         var fetchedCount: Int = 0
@@ -39,9 +56,13 @@ class EventDetailViewModel: ObservableObject {
         do { fetchedMembers = try await membersFetch } catch { print("Members fetch: \(error)") }
         do { fetchedCount = try await countFetch } catch { print("Count fetch: \(error)") }
 
-        // Apply all at once
-        event = fetchedEvent
-        members = fetchedMembers.map { mwu in
+        // Apply results
+        if let fetched = fetchedEvent {
+            event = fetched
+            Self.cachedEvents[eventId] = fetched
+        }
+
+        let mappedMembers: [(EventMember, AppUser)] = fetchedMembers.map { mwu in
             let user = mwu.user ?? AppUser(
                 id: mwu.userId,
                 authId: nil,
@@ -56,9 +77,15 @@ class EventDetailViewModel: ObservableObject {
             )
             return (mwu.toEventMember, user)
         }
-        photoCount = fetchedCount
+        if !mappedMembers.isEmpty || fetchedMembers.isEmpty == false {
+            members = mappedMembers
+            Self.cachedMembers[eventId] = mappedMembers
+        }
 
-        if let event = fetchedEvent, let currentUser = authService?.currentUser {
+        photoCount = fetchedCount
+        Self.cachedPhotoCounts[eventId] = fetchedCount
+
+        if let event = event, let currentUser = authService?.currentUser {
             isHost = (currentUser.id == event.hostId)
         }
 
@@ -68,7 +95,9 @@ class EventDetailViewModel: ObservableObject {
     func subscribeToUpdates() {
         eventService.subscribeToPhotoCount(eventId: eventId) { [weak self] count in
             Task { @MainActor in
-                self?.photoCount = count
+                guard let self else { return }
+                self.photoCount = count
+                Self.cachedPhotoCounts[self.eventId] = count
             }
         }
     }
@@ -79,6 +108,9 @@ class EventDetailViewModel: ObservableObject {
                 guard let self else { return }
                 if status == .ended {
                     self.event?.status = .ended
+                    if let updated = self.event {
+                        Self.cachedEvents[self.eventId] = updated
+                    }
                     self.eventWasEnded = true
                     NotificationCenter.default.post(name: .eventUpdated, object: nil)
                 }
@@ -92,10 +124,20 @@ class EventDetailViewModel: ObservableObject {
         do {
             try await eventService.endEvent(id: eventId)
             event?.status = .ended
+            if let updated = event {
+                Self.cachedEvents[eventId] = updated
+            }
             eventWasEnded = true
             NotificationCenter.default.post(name: .eventUpdated, object: nil)
         } catch {
             print("Failed to end event: \(error)")
         }
+    }
+
+    /// Invalidate the cache for this event (use when the event may have changed significantly)
+    static func invalidateCache(for eventId: UUID) {
+        cachedEvents.removeValue(forKey: eventId)
+        cachedMembers.removeValue(forKey: eventId)
+        cachedPhotoCounts.removeValue(forKey: eventId)
     }
 }

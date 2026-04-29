@@ -29,7 +29,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_NSCameraUsageDescription: "WeWere needs camera access to capture event photos"
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "WeWere needs photo library access to save developed photos"

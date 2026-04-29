@@ -18,33 +18,38 @@ struct RootView: View {
             WeWereHeader()
 
             ZStack(alignment: .bottom) {
-            TabView(selection: $appState.selectedTab.animation(.easeInOut(duration: 0.3))) {
-                NavigationStack(path: $appState.navigationPath) {
-                    HomeView()
-                        .navigationDestination(for: Route.self) { route in
-                            destinationView(for: route)
-                        }
-                }
-                .tag(Tab.home)
+                Color(hex: "#131313").ignoresSafeArea()
 
-                NavigationStack {
-                    PastEventsView()
-                        .navigationDestination(for: Route.self) { route in
-                            destinationView(for: route)
+                // Render only the active tab. Nav paths are persisted in AppState
+                // so each tab restores its navigation state when re-selected.
+                Group {
+                    switch appState.selectedTab {
+                    case .home:
+                        NavigationStack(path: $appState.navigationPath) {
+                            HomeView()
+                                .navigationDestination(for: Route.self) { route in
+                                    destinationView(for: route)
+                                }
                         }
+                    case .events:
+                        NavigationStack(path: $appState.eventsNavPath) {
+                            PastEventsView()
+                                .navigationDestination(for: Route.self) { route in
+                                    destinationView(for: route)
+                                }
+                        }
+                    case .profile:
+                        NavigationStack(path: $appState.profileNavPath) {
+                            ProfileView()
+                                .navigationDestination(for: Route.self) { route in
+                                    destinationView(for: route)
+                                }
+                        }
+                    }
                 }
-                .tag(Tab.events)
 
-                NavigationStack {
-                    ProfileView()
-                }
-                .tag(Tab.profile)
+                WeWereTabBar(selectedTab: selectedTabRawValue)
             }
-            // Hide default tab bar
-            .toolbar(.hidden, for: .tabBar)
-
-            WeWereTabBar(selectedTab: selectedTabRawValue)
-        }
         }
         .environmentObject(sharedViewModel)
         .background(Color(hex: "#131313"))
@@ -93,6 +98,8 @@ struct RootView: View {
             JoinEventView(shareCode: shareCode)
         case .createEvent:
             CreateEventView()
+        case .attendees(let eventId):
+            AttendeesListView(eventId: eventId)
         }
     }
 

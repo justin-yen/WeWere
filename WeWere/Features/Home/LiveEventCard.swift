@@ -36,7 +36,7 @@ struct LiveEventCard: View {
                 endPoint: .bottom
             )
 
-            // Content
+            // Content — single VStack so title and button never overlap
             VStack(alignment: .leading, spacing: WeWereSpacing.xs) {
                 Spacer()
 
@@ -46,31 +46,27 @@ struct LiveEventCard: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
 
-                HStack(spacing: WeWereSpacing.md) {
-                    HStack(spacing: WeWereSpacing.xxs) {
-                        Image(systemName: "camera")
-                            .font(.system(size: 11))
-                        Text("\(photoCount)")
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
-                    }
+                HStack {
+                    HStack(spacing: WeWereSpacing.md) {
+                        HStack(spacing: WeWereSpacing.xxs) {
+                            Image(systemName: "camera")
+                                .font(.system(size: 11))
+                            Text("\(photoCount)")
+                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
+                        }
 
-                    HStack(spacing: WeWereSpacing.xxs) {
-                        Image(systemName: "person.2")
-                            .font(.system(size: 11))
-                        Text("\(memberCount)")
-                            .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
+                        HStack(spacing: WeWereSpacing.xxs) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 11))
+                            Text("\(memberCount)")
+                                .font(.custom(WeWereFontFamily.spaceGroteskRegular, size: 12))
+                        }
                     }
-                }
-                .foregroundStyle(WeWereColors.onSurfaceVariant)
-            }
-            .padding(WeWereSpacing.lg)
+                    .foregroundStyle(WeWereColors.onSurfaceVariant)
 
-            // Camera quick-access button (bottom right)
-            if let onCamera {
-                VStack {
                     Spacer()
-                    HStack {
-                        Spacer()
+
+                    if let onCamera {
                         Button {
                             onCamera()
                         } label: {
@@ -80,22 +76,18 @@ struct LiveEventCard: View {
                                 Text("Open Camera")
                                     .font(.custom(WeWereFontFamily.spaceGroteskMedium, size: 12))
                             }
-                            .foregroundStyle(Color(hex: "1a1c1c"))
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
-                            .background(
-                                LinearGradient(
-                                    colors: [.white, Color(hex: "d4d4d4")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: WeWereRadius.lg)
+                                    .stroke(.white, lineWidth: 1)
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.lg))
                         }
                     }
                 }
-                .padding(WeWereSpacing.lg)
             }
+            .padding(WeWereSpacing.lg)
         }
         .frame(height: 280)
         .clipShape(RoundedRectangle(cornerRadius: WeWereRadius.xl))
