@@ -11,7 +11,7 @@ enum DeepLinkService {
 
         // For custom scheme: wewere://event/SHARECODE
         // url.host = "event", url.path = "/SHARECODE"
-        if url.scheme == "wewere" {
+        if url.scheme == AppEnvironment.urlScheme {
             if url.host == "event" {
                 let code = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 if !code.isEmpty {
@@ -25,6 +25,9 @@ enum DeepLinkService {
             }
             return nil
         }
+
+        guard url.scheme == "https",
+              url.host == (AppEnvironment.isStaging ? "api-staging-staging-62e9.up.railway.app" : "wewere.app") else { return nil }
 
         // For universal links: https://wewere.app/event/SHARECODE
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {

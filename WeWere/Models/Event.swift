@@ -51,7 +51,7 @@ struct Event: Codable, Identifiable, Hashable {
     }
 
     var shareURL: URL? {
-        URL(string: "wewere://event/\(shareCode)")
+        URL(string: "\(AppEnvironment.urlScheme)://event/\(shareCode)")
     }
 
     /// Text to share with the link
