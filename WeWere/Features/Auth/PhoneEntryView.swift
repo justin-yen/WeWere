@@ -83,7 +83,7 @@ struct PhoneEntryView: View {
 
             Spacer()
 
-            #if DEBUG
+            #if DEBUG && STAGING
             // Test login buttons (simulator / debug builds only)
             VStack(spacing: WeWereSpacing.xs) {
                 Text("DEV TEST ACCOUNTS")
@@ -118,7 +118,7 @@ struct PhoneEntryView: View {
         }
     }
 
-    #if DEBUG
+    #if DEBUG && STAGING
     private func testLogin(testId: String) {
         isLoading = true
         errorMessage = nil

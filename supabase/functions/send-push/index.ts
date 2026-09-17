@@ -1,3 +1,4 @@
+import { requireInternalKey } from "../_shared/internal-auth.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -12,6 +13,8 @@ const APNS_BUNDLE_ID = "com.wewere.app";
 const APNS_PRIVATE_KEY_BASE64 = Deno.env.get("APNS_PRIVATE_KEY_BASE64") ?? "";
 
 serve(async (req) => {
+  const denied = await requireInternalKey(req);
+  if (denied) return denied;
   try {
     const { event_id, type = "film_ready" } = await req.json();
 

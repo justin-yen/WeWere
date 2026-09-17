@@ -10,11 +10,11 @@ from pydantic import BaseModel, Field
 # ---------- Auth ----------
 
 class SendOTPRequest(BaseModel):
-    phone_number: str = Field(..., description="E.164 formatted phone number")
+    phone_number: str = Field(..., pattern=r"^\+[1-9]\d{7,14}$", description="E.164 formatted phone number")
 
 
 class VerifyOTPRequest(BaseModel):
-    phone_number: str
+    phone_number: str = Field(..., pattern=r"^\+[1-9]\d{7,14}$")
     code: str = Field(..., min_length=4, max_length=8)
 
 

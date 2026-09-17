@@ -23,13 +23,13 @@ WeWere is a disposable film camera iOS app. Users create events, invite friends 
 - **Location:** `/backend/`
 - **Deployed:** Railway at `https://api-production-77f0.up.railway.app`
 - **Key files:**
-  - `routers/auth.py` -- Phone OTP via Twilio Verify, Supabase email+password session creation, test login
+  - `routers/auth.py` -- Phone OTP via Twilio Verify, passwordless Supabase session exchange; development-only test login
   - `routers/events.py` -- CRUD, join, end, develop. Uses `auth_id` → `_get_internal_user_id()` for all queries
   - `routers/photos.py` -- Upload, list with signed URLs, count, peak time, comments
   - `routers/feed.py` -- `/feed/random-photos` endpoint for the home photo stack (single call, batch signed URLs)
   - `routers/places.py` -- Google Places Autocomplete proxy for location search
   - `routers/reactions.py` -- Emoji reactions with user info for long-press display
-  - `middleware/auth.py` -- JWT decode supporting both HS256 and ES256 (no-verify fallback)
+  - `middleware/auth.py` -- Verified HS256 or JWKS-backed ES256/RS256 JWT authentication
 
 ### Supabase
 - **Project:** `xsvscfqnzybdxptijmqs`
@@ -43,8 +43,8 @@ WeWere is a disposable film camera iOS app. Users create events, invite friends 
 - **Date decoding:** Supabase returns ISO 8601 strings. The SupabaseManager configures a custom decoder. The APIClient also has its own ISO 8601 decoder.
 - **Entitlements:** Personal dev team doesn't support Associated Domains or Push Notifications. The `project.yml` has no entitlements section. Don't add one or xcodegen will break builds.
 - **xcodegen:** Run `xcodegen generate --spec project.yml` after adding/removing Swift files. The `.xcodeproj` is gitignored.
-- **Secrets:** iOS secrets in `WeWere/Secrets.swift` (gitignored). Backend secrets in `.env` + Railway env vars.
-- **Twilio:** Uses Verify (not raw SMS). The phone-to-email pattern is `{digits}@wewere.phone` (no `+` prefix). Password is `sha256("wewere-{phone}")`.
+- **Secrets:** iOS production secrets are in `WeWere/Secrets.swift`, staging secrets in `WeWere/StagingSecrets.swift` (both gitignored). Backend secrets are in `.env` and Railway environment variables.
+- **Twilio:** Uses Verify (not raw SMS). Existing synthetic email identities follow `{digits}@wewere.phone`. Sessions use a one-time Supabase link exchange; predictable legacy passwords must be retired using `backend/scripts/retire_legacy_passwords.py` after reviewing the target environment.
 - **Signed URLs:** Photos in Supabase Storage are private. The backend generates signed URLs (1hr expiry) via `get_signed_urls()` batch call.
 - **Photo orientation:** Camera captures are normalized via `RetroFilter.normalizeOrientation()` before filter application. `videoRotationAngle = 90` is set on the capture connection.
 
@@ -56,6 +56,7 @@ WeWere is a disposable film camera iOS app. Users create events, invite friends 
 - **Stitch project ID:** `10757421569687931481` (Google Stitch, has all screen designs)
 
 ## Deploy
+- **Simulator ownership:** Every task using a simulator creates and boots its own uniquely named device. Record its name and UDID, pass its name with `scripts/run.sh --sim`, and target the explicit UDID for all `simctl` commands. Never use another task's device.
 - **Backend:** `cd backend && railway up`
-- **iOS:** `xcodegen generate --spec project.yml` then build in Xcode
+- **iOS:** Use `./scripts/run.sh --env staging --sim "YOUR-DEVICE"` for staging or `--env production` for production. See `docs/APP_ENVIRONMENTS.md`.
 - **DB migrations:** Paste SQL in Supabase Dashboard > SQL Editor

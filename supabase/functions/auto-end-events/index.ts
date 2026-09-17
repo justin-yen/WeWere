@@ -1,3 +1,4 @@
+import { requireInternalKey } from "../_shared/internal-auth.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -32,6 +33,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  *   Database > Cron Jobs > Create
  */
 serve(async (req) => {
+  const denied = await requireInternalKey(req);
+  if (denied) return denied;
   try {
     // Verify this is called with a valid key (service role or anon with RLS bypass)
     const authHeader = req.headers.get("Authorization");
@@ -93,6 +96,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "x-internal-api-key": Deno.env.get("INTERNAL_API_KEY")!,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({

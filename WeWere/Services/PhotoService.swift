@@ -117,7 +117,7 @@ final class PhotoService: ObservableObject {
     func getFilteredPhotoURL(photo: Photo) -> URL? {
         // This is a fallback for when we don't have a signed URL from the backend
         let path = photo.filteredStoragePath ?? photo.storagePath
-        let baseURL = Secrets.supabaseURL
+        let baseURL = AppEnvironment.supabaseURL
         let urlString = "\(baseURL)/storage/v1/object/authenticated/\(bucketName)/\(path)"
         return URL(string: urlString)
     }

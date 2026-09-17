@@ -65,6 +65,10 @@ struct AuthFlowView: View {
                 Spacer()
             }
         }
+        .onAppear { if authService.needsProfile { step = .profileSetup } }
+        .onChange(of: authService.needsProfile) { _, needsProfile in
+            if needsProfile { step = .profileSetup }
+        }
         .animation(.easeInOut(duration: 0.3), value: step)
     }
 }

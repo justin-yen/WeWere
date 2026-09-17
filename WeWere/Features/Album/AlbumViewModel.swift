@@ -35,6 +35,12 @@ class AlbumViewModel: ObservableObject {
     static var cachedURLs: [UUID: [UUID: URL]] = [:]
     private static var cachedEvents: [UUID: Event] = [:]
 
+    static func clearSessionCache() {
+        cachedPhotos.removeAll()
+        cachedURLs.removeAll()
+        cachedEvents.removeAll()
+    }
+
     init(eventId: UUID) {
         self.eventId = eventId
 
@@ -52,6 +58,7 @@ class AlbumViewModel: ObservableObject {
     }
 
     func load() async {
+        let generation = SessionCoordinator.shared.generation
         if !photos.isEmpty && !photoURLs.isEmpty {
             isLoading = false
             isLoadingPhotos = false
@@ -65,6 +72,7 @@ class AlbumViewModel: ObservableObject {
 
         do {
             let photoResponses = try await photoService.fetchPhotos(eventId: eventId)
+            guard generation == SessionCoordinator.shared.generation else { return }
             photos = photoResponses.map { $0.toPhoto }
             photoCount = photos.count
 

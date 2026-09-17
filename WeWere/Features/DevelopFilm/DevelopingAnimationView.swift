@@ -216,6 +216,7 @@ struct DevelopingAnimationView: View {
 
     /// Warm the album cache during the developing animation so photos appear instantly.
     private func prefetchAlbum() {
+        let generation = SessionCoordinator.shared.generation
         Task.detached(priority: .userInitiated) {
             let photoService = await PhotoService()
             do {
@@ -237,9 +238,11 @@ struct DevelopingAnimationView: View {
                 }
 
                 // Populate AlbumViewModel static cache so the album renders instantly
+                let resolvedURLs = urls
                 await MainActor.run {
+                    guard generation == SessionCoordinator.shared.generation else { return }
                     AlbumViewModel.cachedPhotos[eventId] = photos
-                    AlbumViewModel.cachedURLs[eventId] = urls
+                    AlbumViewModel.cachedURLs[eventId] = resolvedURLs
                 }
 
                 // Warm URLSession's disk cache by fetching the image bytes.

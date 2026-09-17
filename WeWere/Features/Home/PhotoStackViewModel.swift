@@ -37,9 +37,12 @@ class PhotoStackViewModel: ObservableObject {
     @Published var isLoading = false
 
     private let api = APIClient.shared
+    static func clearSessionCache() { cachedPhotos = nil }
+
     private static var cachedPhotos: [StackPhoto]?
 
     func loadPhotos(developedEvents: [Event]) async {
+        let generation = SessionCoordinator.shared.generation
         // Return cached results if available
         if let cached = Self.cachedPhotos, !cached.isEmpty {
             stackPhotos = cached
@@ -54,6 +57,7 @@ class PhotoStackViewModel: ObservableObject {
         do {
             // Single API call returns random photos with signed URLs
             let feedPhotos: [FeedPhoto] = try await api.get("/feed/random-photos?count=8")
+            guard generation == SessionCoordinator.shared.generation else { return }
 
             let photos = feedPhotos.compactMap { fp -> StackPhoto? in
                 guard let url = URL(string: fp.signedUrl), !fp.signedUrl.isEmpty else { return nil }

@@ -3,10 +3,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, require_development
 from services.supabase import get_client
 
-router = APIRouter(prefix="/test", tags=["test"])
+router = APIRouter(prefix="/test", tags=["test"], dependencies=[Depends(require_development)])
 
 
 _FIRST_NAMES = [

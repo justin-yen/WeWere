@@ -32,10 +32,18 @@ struct EmptyResponse: Decodable {}
 
 // MARK: - API Client
 
+@MainActor
 class APIClient {
     static let shared = APIClient()
-    private let baseURL = "https://api-production-77f0.up.railway.app"
-    private var accessToken: String?
+    private let baseURL: String
+    private let session: URLSession
+    private let coordinator: SessionCoordinator
+
+    init(baseURL: String = AppEnvironment.apiURL, session: URLSession = AppNetwork.session, coordinator: SessionCoordinator? = nil) {
+        self.baseURL = baseURL
+        self.session = session
+        self.coordinator = coordinator ?? .shared
+    }
     var currentUserName: String?
 
     private let decoder: JSONDecoder = {
@@ -72,16 +80,24 @@ class APIClient {
         return encoder
     }()
 
-    func setToken(_ token: String) {
-        accessToken = token
-    }
-
-    func clearToken() {
-        accessToken = nil
-    }
-
-    func getToken() -> String? {
-        return accessToken
+    private func send(_ request: URLRequest, requiresAuth: Bool) async throws -> (Data, URLResponse) {
+        guard requiresAuth else { return try await session.data(for: request) }
+        let generation = coordinator.generation
+        let token = try await coordinator.accessToken()
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        var authorized = request
+        authorized.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let first = try await session.data(for: authorized)
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        guard (first.1 as? HTTPURLResponse)?.statusCode == 401 else { return first }
+        // Only replay explicit authentication rejection, never ambiguous network/5xx
+        // failures of a mutation. Those require Stage 2 idempotency contracts.
+        let refreshed = try await coordinator.accessToken(rejectedToken: token)
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        authorized.setValue("Bearer \(refreshed)", forHTTPHeaderField: "Authorization")
+        let second = try await session.data(for: authorized)
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        return second
     }
 
     // MARK: - Core Request
@@ -101,15 +117,12 @@ class APIClient {
         urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        if requiresAuth, let token = accessToken {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
 
         if let body = body {
             urlRequest.httpBody = try encoder.encode(AnyEncodable(body))
         }
 
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await send(urlRequest, requiresAuth: requiresAuth)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.noData
@@ -135,7 +148,6 @@ class APIClient {
             return try decoder.decode(T.self, from: data)
         } catch {
             print("Decoding error for \(path): \(error)")
-            print("Response body: \(String(data: data, encoding: .utf8) ?? "nil")")
             throw APIError.decodingError(error)
         }
     }
@@ -176,9 +188,6 @@ class APIClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        if let token = accessToken {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
 
         var body = Data()
 
@@ -199,7 +208,7 @@ class APIClient {
 
         urlRequest.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await send(urlRequest, requiresAuth: true)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.noData
@@ -223,7 +232,6 @@ class APIClient {
             return try decoder.decode(T.self, from: data)
         } catch {
             print("Decoding error for upload \(path): \(error)")
-            print("Response body: \(String(data: data, encoding: .utf8) ?? "nil")")
             throw APIError.decodingError(error)
         }
     }
