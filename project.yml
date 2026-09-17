@@ -7,6 +7,27 @@ options:
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
+configs:
+  Debug: debug
+  StagingDebug: debug
+  Release: release
+
+schemes:
+  WeWere:
+    build:
+      targets:
+        WeWere: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  WeWere-Staging:
+    build:
+      targets:
+        WeWere: all
+    run:
+      config: StagingDebug
+
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
@@ -25,6 +46,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: WeWere/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.wewere.app
+        APP_URL_SCHEME: wewere
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
@@ -41,5 +63,15 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+      configs:
+        StagingDebug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.wewere.app.staging
+          APP_URL_SCHEME: wewere-staging
+          INFOPLIST_KEY_CFBundleDisplayName: WeWere Staging
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG STAGING"
+        Debug:
+          INFOPLIST_KEY_CFBundleDisplayName: WeWere
+        Release:
+          INFOPLIST_KEY_CFBundleDisplayName: WeWere
     dependencies:
       - package: Supabase

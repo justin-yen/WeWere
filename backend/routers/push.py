@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, require_internal_key
 from models.schemas import RegisterPushTokenRequest, SendPushRequest, SuccessResponse
 from services.push_service import send_push_to_tokens
 from services.supabase import get_client
@@ -40,7 +40,7 @@ async def register_push_token(
     return SuccessResponse(success=True)
 
 
-@router.post("/send", response_model=SuccessResponse)
+@router.post("/send", response_model=SuccessResponse, dependencies=[Depends(require_internal_key)])
 async def send_push(body: SendPushRequest):
     """Send a push notification to all members of an event.
 

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Supabase
 
 // MARK: - Backend Response Types
@@ -67,44 +68,102 @@ final class AuthService: ObservableObject {
     @Published var needsProfile = false
 
     private let api = APIClient.shared
-    private let tokenKey = "wewere_access_token"
-    private let refreshTokenKey = "wewere_refresh_token"
+    private let coordinator = SessionCoordinator.shared
+    @Published var recoveryError: String?
+    @Published var isRecovering = false
+    private var invalidationObserver: NSObjectProtocol?
 
-    // Keep SupabaseManager for realtime subscriptions only
-    private var client: SupabaseClient { SupabaseManager.shared.client }
+    init() {
+        coordinator.onTokenChange = { token in
+            let generation = SessionCoordinator.shared.generation
+            Task {
+                guard generation == SessionCoordinator.shared.generation else { return }
+                if let token {
+                    await SupabaseManager.shared.client.realtimeV2.setAuth(token)
+                } else {
+                    await SupabaseManager.shared.client.removeAllChannels()
+                }
+            }
+        }
+        invalidationObserver = NotificationCenter.default.addObserver(
+            forName: .sessionRequiresSignIn, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard !SessionCoordinator.shared.hasCredentials else { return }
+                self?.clearSessionCaches()
+                self?.currentUser = nil
+                self?.isAuthenticated = false
+                self?.needsProfile = false
+                self?.recoveryError = nil
+            }
+        }
+    }
 
-    // MARK: - Initialize
+    // MARK: - Initialize / reconnect
 
     func initialize() async {
-        defer { isInitializing = false }
-
-        // Try to restore saved token
-        guard let savedToken = UserDefaults.standard.string(forKey: tokenKey) else {
-            print("No saved token found")
-            return
-        }
-
-        api.setToken(savedToken)
-
-        // Verify token is still valid by fetching profile
+        guard !isRecovering else { return }
+        isRecovering = true
+        defer { isInitializing = false; isRecovering = false }
         do {
-            let user: AppUser = try await api.get("/profiles/me")
+            try coordinator.restore()
+            guard coordinator.hasCredentials else { return }
+            if let cached = coordinator.cachedProfile {
+                currentUser = cached
+                isAuthenticated = true
+            }
+            let generation = coordinator.generation
+            do {
+                let user: AppUser = try await api.get("/profiles/me")
+                guard generation == coordinator.generation else { return }
+                try coordinator.saveProfile(user)
+                currentUser = user
+                isAuthenticated = true
+                needsProfile = false
+                recoveryError = nil
+            } catch APIError.httpError(let status, _) where status == 404 {
+                guard generation == coordinator.generation else { return }
+                needsProfile = true
+                isAuthenticated = false
+                recoveryError = nil
+            }
+        } catch SessionError.signInRequired {
+            currentUser = nil
+            isAuthenticated = false
+            recoveryError = nil
+        } catch SessionError.accountChanged {
+            // A sign-out/new sign-in owns the newer state.
+        } catch {
+            // Log only error category/codes, never token payloads or provider bodies.
+            let diagnostic = error as NSError
+            Logger(subsystem: "com.wewere.app", category: "SessionRecovery").error("Recovery failed: domain=\(diagnostic.domain, privacy: .public) code=\(diagnostic.code)")
+            if case SessionError.keychain(let status) = error {
+                Logger(subsystem: "com.wewere.app", category: "SessionRecovery").error("Keychain status=\(status)")
+            }
+            recoveryError = "Unable to restore your session right now. Your saved sign-in is safe."
+        }
+    }
+
+    private func accept(_ response: VerifyOTPResponse) async throws {
+        clearSessionCaches()
+        try coordinator.install(accessToken: response.accessToken, refreshToken: response.refreshToken, profile: response.user)
+        recoveryError = nil
+        if let user = response.user {
             currentUser = user
             isAuthenticated = true
-
-            // Also restore Supabase session for realtime
-            await restoreSupabaseSession()
-        } catch {
-            print("Saved token invalid: \(error.localizedDescription)")
-            api.clearToken()
-            UserDefaults.standard.removeObject(forKey: tokenKey)
-            UserDefaults.standard.removeObject(forKey: refreshTokenKey)
+            needsProfile = false
+        } else if response.needsProfile {
+            currentUser = nil
+            needsProfile = true
+            isAuthenticated = false
+        } else {
+            await initialize()
         }
     }
 
     // MARK: - Test Login (dev only)
 
-    #if DEBUG
+    #if DEBUG && STAGING
     func testLogin(testId: String) async throws {
         struct TestLoginRequest: Encodable {
             let testId: String
@@ -117,25 +176,15 @@ final class AuthService: ObservableObject {
             }
         }
 
+        let generation = coordinator.generation
         let response: VerifyOTPResponse = try await api.post(
             "/auth/test-login",
             body: TestLoginRequest(testId: testId, firstName: "Test", lastName: "User"),
             requiresAuth: false
         )
 
-        api.setToken(response.accessToken)
-        UserDefaults.standard.set(response.accessToken, forKey: tokenKey)
-        UserDefaults.standard.set(response.refreshToken, forKey: refreshTokenKey)
-
-        await setSupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken)
-
-        if let user = response.user {
-            currentUser = user
-            isAuthenticated = true
-            needsProfile = false
-        } else {
-            needsProfile = true
-        }
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        try await accept(response)
     }
     #endif
 
@@ -166,45 +215,15 @@ final class AuthService: ObservableObject {
             }
         }
 
+        let generation = coordinator.generation
         let response: VerifyOTPResponse = try await api.post(
             "/auth/verify-otp",
             body: VerifyOTPRequest(phoneNumber: phoneNumber, code: code),
             requiresAuth: false
         )
 
-        print("DEBUG verify-otp response: needsProfile=\(response.needsProfile), user=\(response.user != nil)")
-
-        // Store tokens
-        api.setToken(response.accessToken)
-        UserDefaults.standard.set(response.accessToken, forKey: tokenKey)
-        UserDefaults.standard.set(response.refreshToken, forKey: refreshTokenKey)
-
-        // Set Supabase session for realtime subscriptions
-        await setSupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken)
-
-        if let user = response.user {
-            print("DEBUG: got user profile: \(user.resolvedDisplayName)")
-            currentUser = user
-            isAuthenticated = true
-            needsProfile = false
-        } else if response.needsProfile {
-            print("DEBUG: needs profile setup")
-            needsProfile = true
-        } else {
-            // Backend says no profile needed but didn't return user object
-            // Try fetching the profile directly
-            print("DEBUG: no user in response, fetching profile...")
-            do {
-                let profile: AppUser = try await api.get("/profiles/me")
-                currentUser = profile
-                isAuthenticated = true
-                needsProfile = false
-                print("DEBUG: fetched profile: \(profile.resolvedDisplayName)")
-            } catch {
-                print("DEBUG: profile fetch failed: \(error)")
-                needsProfile = true
-            }
-        }
+        guard generation == coordinator.generation else { throw SessionError.accountChanged }
+        try await accept(response)
     }
 
     // MARK: - Profile Creation
@@ -219,6 +238,7 @@ final class AuthService: ObservableObject {
 
         let user: AppUser = try await api.post("/auth/create-profile", body: request)
 
+        try coordinator.saveProfile(user)
         currentUser = user
         needsProfile = false
         isAuthenticated = true
@@ -240,6 +260,7 @@ final class AuthService: ObservableObject {
         )
 
         let updatedUser: AppUser = try await api.put("/profiles/me", body: request)
+        try coordinator.saveProfile(updatedUser)
         currentUser = updatedUser
     }
 
@@ -253,6 +274,7 @@ final class AuthService: ObservableObject {
         )
 
         let updatedUser: AppUser = try await api.put("/profiles/me", body: request)
+        try coordinator.saveProfile(updatedUser)
         currentUser = updatedUser
     }
 
@@ -266,32 +288,20 @@ final class AuthService: ObservableObject {
 
     // MARK: - Sign Out
 
+    private func clearSessionCaches() {
+        AlbumViewModel.clearSessionCache()
+        EventDetailViewModel.clearSessionCache()
+        PhotoStackViewModel.clearSessionCache()
+        URLCache.shared.removeAllCachedResponses()
+    }
+
     func signOut() async throws {
-        api.clearToken()
-        UserDefaults.standard.removeObject(forKey: tokenKey)
-        UserDefaults.standard.removeObject(forKey: refreshTokenKey)
-
-        try? await client.auth.signOut()
-
+        try await coordinator.signOut()
+        clearSessionCaches()
         currentUser = nil
         isAuthenticated = false
         needsProfile = false
-    }
-
-    // MARK: - Supabase Session (for realtime only)
-
-    private func setSupabaseSession(accessToken: String, refreshToken: String) async {
-        do {
-            try await client.auth.setSession(accessToken: accessToken, refreshToken: refreshToken)
-        } catch {
-            print("Failed to set Supabase session for realtime: \(error)")
-        }
-    }
-
-    private func restoreSupabaseSession() async {
-        guard let accessToken = UserDefaults.standard.string(forKey: tokenKey),
-              let refreshToken = UserDefaults.standard.string(forKey: refreshTokenKey) else { return }
-        await setSupabaseSession(accessToken: accessToken, refreshToken: refreshToken)
+        recoveryError = nil
     }
 }
 

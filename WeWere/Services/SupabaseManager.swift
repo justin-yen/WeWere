@@ -35,10 +35,14 @@ final class SupabaseManager: @unchecked Sendable {
         }
 
         client = SupabaseClient(
-            supabaseURL: URL(string: Secrets.supabaseURL)!,
-            supabaseKey: Secrets.supabaseAnonKey,
+            supabaseURL: URL(string: AppEnvironment.supabaseURL)!,
+            supabaseKey: AppEnvironment.supabaseAnonKey,
             options: .init(
-                db: .init(encoder: encoder, decoder: decoder)
+                db: .init(encoder: encoder, decoder: decoder),
+                auth: .init(
+                    autoRefreshToken: false,
+                    accessToken: { try await SessionCoordinator.shared.accessToken() }
+                )
             )
         )
     }

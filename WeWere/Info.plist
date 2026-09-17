@@ -22,7 +22,7 @@
 			<string>com.wewere.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>wewere</string>
+				<string>$(APP_URL_SCHEME)</string>
 			</array>
 		</dict>
 	</array>

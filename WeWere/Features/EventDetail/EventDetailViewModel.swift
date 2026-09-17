@@ -24,6 +24,12 @@ class EventDetailViewModel: ObservableObject {
     private static var cachedMembers: [UUID: [(EventMember, AppUser)]] = [:]
     private static var cachedPhotoCounts: [UUID: Int] = [:]
 
+    static func clearSessionCache() {
+        cachedEvents.removeAll()
+        cachedMembers.removeAll()
+        cachedPhotoCounts.removeAll()
+    }
+
     init(eventId: UUID) {
         self.eventId = eventId
 
@@ -37,6 +43,7 @@ class EventDetailViewModel: ObservableObject {
     }
 
     func load() async {
+        let generation = SessionCoordinator.shared.generation
         // If we have cached data, revalidate in the background without a spinner
         let hasCached = event != nil
         if !hasCached {
@@ -57,6 +64,7 @@ class EventDetailViewModel: ObservableObject {
         do { fetchedCount = try await countFetch } catch { print("Count fetch: \(error)") }
 
         // Apply results
+        guard generation == SessionCoordinator.shared.generation else { return }
         if let fetched = fetchedEvent {
             event = fetched
             Self.cachedEvents[eventId] = fetched
@@ -93,9 +101,10 @@ class EventDetailViewModel: ObservableObject {
     }
 
     func subscribeToUpdates() {
+        let generation = SessionCoordinator.shared.generation
         eventService.subscribeToPhotoCount(eventId: eventId) { [weak self] count in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, generation == SessionCoordinator.shared.generation else { return }
                 self.photoCount = count
                 Self.cachedPhotoCounts[self.eventId] = count
             }
@@ -103,9 +112,10 @@ class EventDetailViewModel: ObservableObject {
     }
 
     func subscribeToEventEnd() {
+        let generation = SessionCoordinator.shared.generation
         eventService.subscribeToEventStatus(eventId: eventId) { [weak self] status in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, generation == SessionCoordinator.shared.generation else { return }
                 if status == .ended {
                     self.event?.status = .ended
                     if let updated = self.event {
@@ -119,10 +129,12 @@ class EventDetailViewModel: ObservableObject {
     }
 
     func endEvent() async {
+        let generation = SessionCoordinator.shared.generation
         isEnding = true
         defer { isEnding = false }
         do {
             try await eventService.endEvent(id: eventId)
+            guard generation == SessionCoordinator.shared.generation else { return }
             event?.status = .ended
             if let updated = event {
                 Self.cachedEvents[eventId] = updated

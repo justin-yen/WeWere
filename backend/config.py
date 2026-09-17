@@ -7,6 +7,10 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
 
+    APP_ENV: str = os.getenv("APP_ENV", "production")
+    ENABLE_TEST_ENDPOINTS: bool = os.getenv("ENABLE_TEST_ENDPOINTS", "false").lower() == "true"
+    INTERNAL_API_KEY: str = os.getenv("INTERNAL_API_KEY", "")
+
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
