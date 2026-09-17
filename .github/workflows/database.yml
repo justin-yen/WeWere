@@ -1,0 +1,108 @@
+name: Release pipeline
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PRODUCTION_BRANCH: main
+  STAGING_BRANCH: staging
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - name: Enforce migration history
+        run: |
+          # Candidate migrations may be removed from staging before release.
+          # Migrations already on main are immutable.
+          if [[ "${{ github.event_name }}" == push && "${{ github.ref }}" == refs/heads/main ]]; then
+            BASE_SHA="${{ github.event.before }}"
+          else
+            BASE_SHA="$(git rev-parse origin/main)"
+          fi
+          if [[ "$BASE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+            python3 scripts/check-migrations.py
+          else
+            python3 scripts/check-migrations.py "$BASE_SHA"
+          fi
+      - name: Test clean install and upgrade with existing data
+        run: bash scripts/test-migrations.sh
+      - name: Stop local database
+        if: always()
+        run: supabase stop --no-backup
+
+  release-staging:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: staging-database
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - name: Synchronize staging migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          EXPECTED_SUPABASE_PROJECT_ID: rmehfwdzxyrsdpvwgozm
+        run: python3 scripts/deploy-staging-migrations.py
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@4.36.1
+      - name: Deploy staging API after database
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          DEPLOYMENT_ENVIRONMENT: staging
+          GIT_SHA: ${{ github.sha }}
+        run: python3 scripts/deploy-backend.py
+
+  release-production:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: production-database
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - name: Apply pending migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          EXPECTED_SUPABASE_PROJECT_ID: xsvscfqnzybdxptijmqs
+        run: python3 scripts/deploy-migrations.py
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@4.36.1
+      - name: Deploy production API after database
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          DEPLOYMENT_ENVIRONMENT: production
+          GIT_SHA: ${{ github.sha }}
+        run: python3 scripts/deploy-backend.py
